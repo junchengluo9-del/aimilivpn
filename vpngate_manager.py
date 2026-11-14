@@ -105,10 +105,15 @@ def bounded_int(value: Any, default: int, min_value: int | None = None, max_valu
     return parsed
 
 API_URL = "https://www.vpngate.net/api/iphone/"
+MIRROR_SOURCES = [
+    "https://cdn.jsdelivr.net/gh/GeorgeXie2333/vpngate-list-mirror@latest/pool/servers.json",
+    "https://cdn.jsdelivr.net/gh/GeorgeXie2333/vpngate-list-mirror@latest/data/vpngate.csv",
+    "https://raw.githubusercontent.com/sinspired/VpngateAPI/main/servers.csv",
+]
 FETCH_INTERVAL_SECONDS = env_int("FETCH_INTERVAL_SECONDS", 1260, 1)
 CHECK_INTERVAL_SECONDS = env_int("CHECK_INTERVAL_SECONDS", 1260, 1)
 TARGET_VALID_NODES = env_int("TARGET_VALID_NODES", 3, 1)
-MAX_SCAN_ROWS = env_int("MAX_SCAN_ROWS", 300, 1)
+MAX_SCAN_ROWS = env_int("MAX_SCAN_ROWS", 800, 1)
 OPENVPN_TEST_TIMEOUT_SECONDS = env_int("OPENVPN_TEST_TIMEOUT_SECONDS", 35, 1)
 OPENVPN_CMD = os.environ.get("OPENVPN_CMD", "openvpn")
 OPENVPN_AUTH_USER = os.environ.get("OPENVPN_AUTH_USER", "vpn")
@@ -744,13 +749,17 @@ def fetch_candidates() -> list[dict[str, Any]]:
     has_cache = len(cached_nodes()) > 0
     max_attempts = 1 if has_cache else 2
     
-    # 尝试 URLs 队列: 1. HTTPS(验证证书) 2. HTTPS(不验证证书) 3. HTTP
+    # 尝试 URLs 队列: 官方 API + 镜像 CSV
     attempts_targets = [
         (API_URL, True),
-        (API_URL, False)
+        (API_URL, False),
     ]
     if API_URL.startswith("https://"):
         attempts_targets.append((API_URL.replace("https://", "http://"), True))
+    # 追加镜像源
+    for src in MIRROR_SOURCES:
+        if src.endswith(".csv"):
+            attempts_targets.append((src, False))
         
     log_to_json("INFO", "Main", "开始拉取官方 API 节点列表...")
     
@@ -784,14 +793,10 @@ def fetch_candidates() -> list[dict[str, Any]]:
                         continue
                     candidates.append(node)
                     seen_ips.add(ip)
-                if candidates:
-                    break
             except Exception as e:
                 last_err = e
                 print(f"[fetch_candidates] 拉取失败 (URL: {url}, 验证: {verify_ssl}): {e}", flush=True)
                 log_to_json("WARNING", "Main", f"拉取失败 (URL: {url}, 验证: {verify_ssl}): {e}")
-        if candidates:
-            break
             
     if not candidates:
         err_code, diag_msg = vpn_utils.diagnose_api_failure(API_URL)
@@ -1211,7 +1216,7 @@ def test_node_by_id(node_id: str) -> dict[str, Any]:
     idx = None
     try:
         idx = get_free_test_index()
-        ok, message, _ = run_openvpn_until_ready(str(temp_path), keep_alive=False, route_nopull=True, timeout=12, dev=f"tun{idx}")
+        ok, message, _ = run_openvpn_until_ready(str(temp_path), keep_alive=False, route_nopull=True, timeout=8, dev=f"tun{idx}")
     finally:
         if idx is not None:
             release_test_index(idx)
@@ -1296,7 +1301,7 @@ def test_multiple_nodes(node_ids: list[str]) -> list[dict[str, Any]]:
         try:
             tun_idx = get_free_test_index()
             dev_name = f"tun{tun_idx}"
-            ok, message, _ = run_openvpn_until_ready(str(temp_path), keep_alive=False, route_nopull=True, timeout=12, dev=dev_name)
+            ok, message, _ = run_openvpn_until_ready(str(temp_path), keep_alive=False, route_nopull=True, timeout=8, dev=dev_name)
         finally:
             if tun_idx is not None:
                 release_test_index(tun_idx)
@@ -1325,7 +1330,7 @@ def test_multiple_nodes(node_ids: list[str]) -> list[dict[str, Any]]:
         return temp_node
 
     updated_nodes_map = {}
-    max_workers = min(5, max(1, len(to_test)))
+    max_workers = min(20, max(1, len(to_test)))
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(test_worker, (idx, n)): n["id"] for idx, n in enumerate(to_test)}
         for future in concurrent.futures.as_completed(futures):
@@ -2035,34 +2040,35 @@ INDEX_HTML = r"""<!doctype html>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
     
     :root {
-      --bg-dark: #0b0f19;
-      --bg-surface: rgba(22, 30, 49, 0.6);
-      --bg-surface-hover: rgba(30, 41, 67, 0.85);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --border-color-hover: rgba(99, 102, 241, 0.35);
-      --text-primary: #f3f4f6;
-      --text-secondary: #9ca3af;
-      --primary: #6366f1;
-      --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-      --primary-hover: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-      --success: #10b981;
-      --success-gradient: linear-gradient(135deg, #34d399 0%, #059669 100%);
-      --danger: #f43f5e;
-      --danger-gradient: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
-      --warning: #f59e0b;
-      --warning-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
-      --active-row-bg: rgba(16, 185, 129, 0.06);
-      --active-row-border: rgba(16, 185, 129, 0.25);
+      --bg-dark: #0a0a0f;
+      --bg-surface: rgba(255, 255, 255, 0.06);
+      --bg-surface-hover: rgba(255, 255, 255, 0.10);
+      --border-color: rgba(255, 255, 255, 0.12);
+      --border-color-hover: rgba(255, 255, 255, 0.22);
+      --text-primary: #f5f5f7;
+      --text-secondary: #a1a1aa;
+      --primary: #0a84ff;
+      --primary-gradient: linear-gradient(135deg, #64d2ff 0%, #0a84ff 50%, #bf5af2 100%);
+      --primary-hover: linear-gradient(135deg, #7dd3fc 0%, #3b82f6 50%, #c084fc 100%);
+      --success: #30d158;
+      --success-gradient: linear-gradient(135deg, #32d74b 0%, #30d158 100%);
+      --danger: #ff453a;
+      --danger-gradient: linear-gradient(135deg, #ff6961 0%, #ff453a 100%);
+      --warning: #ff9f0a;
+      --warning-gradient: linear-gradient(135deg, #ffb340 0%, #ff9f0a 100%);
+      --active-row-bg: rgba(48, 209, 88, 0.08);
+      --active-row-border: rgba(48, 209, 88, 0.28);
     }
 
     body {
       margin: 0;
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-dark);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
-        radial-gradient(at 50% 100%, rgba(79, 70, 229, 0.05) 0px, transparent 50%);
+        radial-gradient(at 15% 10%, rgba(100, 210, 255, 0.18) 0px, transparent 45%),
+        radial-gradient(at 85% 20%, rgba(191, 90, 242, 0.16) 0px, transparent 40%),
+        radial-gradient(at 50% 80%, rgba(10, 132, 255, 0.10) 0px, transparent 50%),
+        radial-gradient(at 80% 90%, rgba(48, 209, 88, 0.08) 0px, transparent 40%);
       background-attachment: fixed;
       color: var(--text-primary);
       min-height: 100vh;
@@ -2071,8 +2077,9 @@ INDEX_HTML = r"""<!doctype html>
 
     header {
       padding: 16px 32px;
-      background: rgba(11, 15, 25, 0.7);
-      backdrop-filter: blur(20px);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border-color);
       display: flex;
@@ -2941,7 +2948,25 @@ INDEX_HTML = r"""<!doctype html>
       color: var(--text-secondary);
       line-height: 1.3;
     }
-  </style>
+  
+    /* Light mode */
+    body.light {
+      --bg-dark: #f5f5f7;
+      --bg-surface: rgba(255, 255, 255, 0.72);
+      --bg-surface-hover: rgba(255, 255, 255, 0.88);
+      --border-color: rgba(0, 0, 0, 0.08);
+      --border-color-hover: rgba(0, 0, 0, 0.15);
+      --text-primary: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --active-row-bg: rgba(48, 209, 88, 0.08);
+      background-image: 
+        radial-gradient(at 15% 10%, rgba(100, 210, 255, 0.12) 0px, transparent 45%),
+        radial-gradient(at 85% 20%, rgba(191, 90, 242, 0.10) 0px, transparent 40%),
+        radial-gradient(at 50% 80%, rgba(10, 132, 255, 0.06) 0px, transparent 50%);
+    }
+    body.light header { background: rgba(255,255,255,0.75); }
+    body.light .modal-content { background: rgba(255,255,255,0.92); }
+</style>
 </head>
 <body>
 <header>
@@ -2961,17 +2986,17 @@ INDEX_HTML = r"""<!doctype html>
         <svg xmlns="http://www.w3.org/2000/svg" style="width:12px; height:12px; margin-left: 2px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
       </button>
       <div id="github_dropdown" class="dropdown-content">
-        <a href="https://github.com/baoweise-bot/aimili-vpngate" target="_blank">正式版</a>
-        <a href="https://github.com/baoweise-bot/aimili-vpngate/tree/bate" target="_blank">测试版</a>
+        <a href="https://github.com/junchengluo9-del/aimilivpn" target="_blank">正式版</a>
+        <a href="https://github.com/junchengluo9-del/aimilivpn" target="_blank">测试版</a>
       </div>
     </div>
-    <a href="https://t.me/arestemple" target="_blank" class="btn-telegram">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle; margin-right: 4px;"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.287 5.906c-.778.324-2.334.994-4.666 2.01-.378.15-.577.298-.595.442-.03.243.275.339.69.47l.175.055c.408.133.958.288 1.243.294.26.006.549-.1.868-.32 2.179-1.471 3.304-2.214 3.374-2.23.05-.012.12-.026.166.016.047.041.042.12.037.141-.03.129-1.227 1.241-1.846 1.817-.193.18-.33.307-.358.336-.063.065-.129.13-.19.193-.34.347-.597.609-.043.974.265.175.474.319.684.457.228.15.457.301.765.503.074.049.143.098.207.143.297.206.58.404.916.373.195-.018.398-.2.502-.754.25-1.332.74-4.22.842-5.281.01-.088.001-.22-.103-.312-.104-.092-.252-.09-.323-.087a1.52 1.52 0 0 0-.254.04z"/></svg>
-      Telegram
-    </a>
+
     <button id="refresh" class="btn-primary" style="background: var(--success-gradient);">
       <svg xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.5" /></svg>
       更新节点
+    <button id="theme_toggle" onclick="toggleTheme()" title="切换深色/浅色" style="background:rgba(255,255,255,0.08);">
+      <svg id="theme_icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+    </button>
     </button>
     <div class="dropdown">
       <button id="admin_btn" class="btn-primary" style="background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-color); color: var(--text-primary);">
@@ -3271,7 +3296,7 @@ INDEX_HTML = r"""<!doctype html>
     </div>
   </div>
 
-  <div class="vps-recommend-tab" onclick="openVpsModal()">VPS购买推荐</div>
+
 
   <!-- Gateway Modal (网关自检与代理测试) -->
   <div id="gateway_modal" class="modal">
@@ -4641,6 +4666,15 @@ function exportLogContent() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+function toggleTheme() {
+  document.body.classList.toggle("light");
+  const isLight = document.body.classList.contains("light");
+  localStorage.setItem("theme", isLight ? "light" : "dark");
+}
+(function(){
+  if (localStorage.getItem("theme") === "light") document.body.classList.add("light");
+})();
 </script>
 </body></html>"""
 
