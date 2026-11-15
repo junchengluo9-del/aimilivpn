@@ -21,15 +21,17 @@ AimiliVPN 是一款基于官方 VPNGate 开放协议的高性能、零依赖 VPN
 
 在您的 Linux VPS 上以 root 用户执行以下对应命令：
 
-#### 🌟 正式稳定版本 (main 分支)
+#### 🌟 一键极速部署 (main 分支)
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/baoweise-bot/aimili-vpngate/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/junchengluo9-del/aimilivpn/main/install.sh)
 ```
 
-#### 🧪 测试开发版本 (bate 分支)
+#### 🔧 部署你自己的 Fork
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/baoweise-bot/aimili-vpngate/bate/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/junchengluo9-del/aimilivpn/main/install.sh) <你的GitHub用户名> <仓库名>
 ```
+
+> 本项目仅使用 `main` 分支，不存在 `bate` 等其他分支。重复执行安装脚本时，脚本会自动把旧版本的仓库源纠正回 `junchengluo9-del/aimilivpn`，无需手动修改 `origin`。
 
 > 💡 **小贴士**：部署完成后，终端会输出管理网页的专属链接（含随机安全后缀，如 `http://your_vps_ip:8787/u71e9IXp4TPx`）。在终端中输入 `ml` 命令可以随时调出交互式命令行管理菜单。
 
@@ -145,15 +147,17 @@ AimiliVPN is a high-performance, zero-dependency VPN proxy gateway built entirel
 
 Run the corresponding command on your Linux VPS as root:
 
-#### 🌟 Stable Release (main branch)
+#### 🌟 One-Click Install (main branch)
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/baoweise-bot/aimili-vpngate/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/junchengluo9-del/aimilivpn/main/install.sh)
 ```
 
-#### 🧪 Beta / Development (bate branch)
+#### 🔧 Install Your Own Fork
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/baoweise-bot/aimili-vpngate/bate/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/junchengluo9-del/aimilivpn/main/install.sh) <your-github-user> <repo-name>
 ```
+
+> This project only uses the `main` branch; there is no `bate` or other branch. Re-running the installer automatically points an old `origin` back to `junchengluo9-del/aimilivpn`, so you never have to fix the remote by hand.
 
 > 💡 **Quick Note**: Once installed, copy the printed URL from the terminal to access the Web UI. Type the `ml` command in the terminal to summon the interactive CLI management console.
 
