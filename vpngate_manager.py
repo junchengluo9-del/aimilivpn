@@ -9,6 +9,7 @@ import queue
 import re
 import select
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -3276,6 +3277,153 @@ INDEX_HTML = r"""<!doctype html>
   }
   .note strong { color: var(--ink); font-weight: 600; }
 
+  /* ── Version pill & update modal ──────────────────────────────────── */
+  .version-pill {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease);
+  }
+  .version-pill:hover { color: var(--ink); background: var(--tile-hover); border-color: var(--pane-line-strong); }
+  .version-pill:active { transform: scale(0.98); }
+  .version-pill.has-update {
+    color: var(--accent);
+    background: rgba(10, 132, 255, 0.12);
+    border-color: rgba(10, 132, 255, 0.30);
+  }
+  html.light .version-pill.has-update {
+    background: rgba(0, 113, 227, 0.09);
+    border-color: rgba(0, 113, 227, 0.26);
+  }
+  .version-pill .version-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  .version-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .version-card {
+    padding: 13px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+    box-shadow: inset 0 1px 0 var(--pane-sheen);
+    min-width: 0;
+  }
+  .version-card.is-current { border-color: rgba(10, 132, 255, 0.22); }
+  html.light .version-card.is-current { border-color: rgba(0, 113, 227, 0.20); }
+  .version-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+  .version-card-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .version-card .badge { font-size: 11px; padding: 1.5px 8px; }
+  .version-commit {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .version-subject {
+    margin-top: 7px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 39px;
+    word-break: break-word;
+  }
+  .version-meta {
+    margin-top: 7px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .version-status {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    border: 1px solid var(--note-line);
+    background: var(--note-bg);
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 1.6;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .version-status svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+  .version-status strong { color: var(--ink); font-weight: 600; }
+  .version-status code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink);
+  }
+  html.light .version-status code { background: rgba(16, 20, 28, 0.06); }
+  .version-status.is-update { border-color: rgba(10, 132, 255, 0.28); background: rgba(10, 132, 255, 0.08); color: var(--ink); }
+  html.light .version-status.is-update { border-color: rgba(0, 113, 227, 0.24); background: rgba(0, 113, 227, 0.06); }
+  .version-status.is-ok { border-color: var(--ok-line); background: var(--ok-bg); color: var(--ok-ink); }
+  .version-status.is-bad { border-color: var(--bad-line); background: var(--bad-bg); color: var(--bad-ink); }
+  .version-status.is-warn { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); }
+  .version-status.is-update strong,
+  .version-status.is-ok strong,
+  .version-status.is-bad strong,
+  .version-status.is-warn strong { color: inherit; }
+
+  .spinner-mini {
+    width: 13px;
+    height: 13px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.6px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 0.7s linear infinite;
+    opacity: 0.85;
+  }
+
   /* ── Option cards ─────────────────────────────────────────────────── */
   .option-group {
     display: grid;
@@ -3472,6 +3620,9 @@ INDEX_HTML = r"""<!doctype html>
 
   @media (max-width: 620px) {
     .brand-line h1 { font-size: 14.5px; }
+    .version-pill { height: 20px; padding: 0 8px; font-size: 10px; }
+    .version-grid { grid-template-columns: 1fr; }
+    .version-subject { min-height: 0; -webkit-line-clamp: 3; }
     .btn { height: 32px; padding: 0 11px; font-size: 12px; }
     .icon-btn { width: 32px; padding: 0; }
     .toolbar { padding: 9px; }
@@ -3509,6 +3660,7 @@ INDEX_HTML = r"""<!doctype html>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 5 6v5.4c0 4.2 2.8 7.6 7 9.4 4.2-1.8 7-5.2 7-9.4V6l-7-2.8z"></path><path d="M9.1 12.1l2.1 2.1 3.9-4.2"></path></svg>
       </span>
       <h1>AimiliVPN 节点管理系统</h1>
+      <button id="version_pill" class="version-pill" type="button" onclick="openVersionModal()" title="查看版本 / 检查更新" aria-label="查看版本并检查更新"><span class="version-dot" id="version_pill_dot" style="display: none;"></span><span id="version_pill_text">v—</span></button>
     </div>
     <div id="status" class="status" style="display: none;"><span class="status-dot"></span>服务加载中...</div>
   </div>
@@ -3534,6 +3686,10 @@ INDEX_HTML = r"""<!doctype html>
         <a href="javascript:void(0)" onclick="openGatewayModal()">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="6" rx="2"></rect><rect x="3.5" y="13.5" width="17" height="6" rx="2"></rect><path d="M7.6 7.5h.01M7.6 16.5h.01"></path></svg>
           网关设置
+        </a>
+        <a href="javascript:void(0)" onclick="openVersionModal()">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v8.6"></path><path d="M8.2 8.4l3.8 3.8 3.8-3.8"></path><path d="M4.6 15.2v2.6a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-2.6"></path></svg>
+          版本更新
         </a>
         <a href="javascript:void(0)" onclick="openLogsModal()">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8h7l4.5 4.4v11.2a1.8 1.8 0 0 1-1.8 1.8H6.5a1.8 1.8 0 0 1-1.8-1.8V5.6a1.8 1.8 0 0 1 1.8-1.8z"></path><path d="M13.2 3.9v4.4h4.5M8.4 12.6h7M8.4 16h4.6"></path></svg>
@@ -3928,6 +4084,56 @@ INDEX_HTML = r"""<!doctype html>
           </button>
         </div>
         <button type="button" class="btn" onclick="closeLogsModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Version Modal (版本检查与网页端在线更新) -->
+  <div id="version_modal" class="modal">
+    <div class="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="version_title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="version_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6v8.6"></path><path d="M8.2 8.4l3.8 3.8 3.8-3.8"></path><path d="M4.6 15.2v2.6a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-2.6"></path></svg>
+          版本检查与更新
+        </h2>
+        <button type="button" class="modal-close" onclick="closeVersionModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+
+      <div class="version-grid">
+        <div class="version-card is-current">
+          <div class="version-card-head">
+            <span class="version-card-label">当前版本</span>
+            <span class="badge" id="version_current_branch">—</span>
+          </div>
+          <div class="version-commit" id="version_current_commit">—</div>
+          <div class="version-subject" id="version_current_subject">正在读取本地版本信息...</div>
+          <div class="version-meta" id="version_current_meta">—</div>
+        </div>
+        <div class="version-card">
+          <div class="version-card-head">
+            <span class="version-card-label">远端最新</span>
+            <span class="badge not_checked" id="version_remote_badge">未检查</span>
+          </div>
+          <div class="version-commit" id="version_remote_commit">—</div>
+          <div class="version-subject" id="version_remote_subject">点击「检查更新」获取远端最新版本</div>
+          <div class="version-meta" id="version_remote_meta">—</div>
+        </div>
+      </div>
+
+      <div class="version-status" id="version_status">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"></circle><path d="M12 8.2h.01M12 11.4v4.4"></path></svg>
+        <span id="version_status_text">正在加载版本信息...</span>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeVersionModal()">关闭</button>
+        <button type="button" id="version_check_btn" class="btn" onclick="checkAppVersion()">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5A8 8 0 1 1 12 4"></path><path d="M20 4.5v6h-6"></path></svg>
+          检查更新
+        </button>
+        <button type="button" id="version_update_btn" class="btn btn-accent" data-force="0" onclick="onVersionPrimaryAction()" disabled>立即更新</button>
       </div>
     </div>
   </div>
@@ -5006,6 +5212,249 @@ async function logoutAdmin() {
 // 页面加载时自动初始化数据
 load();
 
+// ── 版本检查与网页端在线更新 ────────────────────────────────────────────
+let appVersionBusy = false;
+let appUpdateRunning = false;
+let appReconnectTimer = null;
+
+function fmtVersionTime(iso) {
+  if (!iso) return "时间未知";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => (n < 10 ? "0" + n : String(n));
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function setVersionStatus(kind, html) {
+  const box = $("version_status");
+  if (!box) return;
+  box.className = "version-status" + (kind ? " is-" + kind : "");
+  $("version_status_text").innerHTML = html;
+}
+
+// 更新成功后立即把卡片/版本标记刷成新版本，避免重启前还显示“落后 N 个提交”
+function applyVersionAfterUpdate(data) {
+  const commit = data.new_commit || "";
+  $("version_current_commit").textContent = commit ? "v" + commit : "—";
+  if (data.new_message) $("version_current_subject").textContent = data.new_message;
+  if (data.new_date) $("version_current_meta").textContent = "提交于 " + fmtVersionTime(data.new_date);
+  $("version_remote_commit").textContent = commit ? "v" + commit : "—";
+  if (data.new_message) $("version_remote_subject").textContent = data.new_message;
+  if (data.new_date) $("version_remote_meta").textContent = "提交于 " + fmtVersionTime(data.new_date);
+  $("version_remote_badge").className = "badge available";
+  $("version_remote_badge").textContent = "已是最新";
+  if (commit) $("version_pill_text").textContent = "v" + commit;
+  $("version_pill").classList.remove("has-update");
+  $("version_pill_dot").style.display = "none";
+  $("version_update_btn").className = "btn btn-accent";
+  $("version_update_btn").disabled = true;
+  $("version_check_btn").disabled = true;
+}
+
+function renderAppVersion(info) {
+  const pill = $("version_pill");
+  const pillText = $("version_pill_text");
+  const dot = $("version_pill_dot");
+  const hasUpdate = !!(info && info.has_update);
+  if (info && info.current_commit) pillText.textContent = "v" + info.current_commit;
+  pill.classList.toggle("has-update", hasUpdate);
+  dot.style.display = hasUpdate ? "inline-block" : "none";
+  pill.title = hasUpdate ? `发现新版本（当前 v${info.current_commit}）` : "查看版本 / 检查更新";
+
+  $("version_current_branch").textContent = (info && info.branch) ? info.branch : "—";
+  $("version_current_commit").textContent = (info && info.current_commit) ? "v" + info.current_commit : "—";
+  $("version_current_subject").textContent = (info && info.current_message) || "未读取到提交说明";
+  $("version_current_meta").textContent = (info && info.current_date) ? "提交于 " + fmtVersionTime(info.current_date) : "";
+
+  const remoteBadge = $("version_remote_badge");
+  if (!info || !info.checked_remote) {
+    remoteBadge.className = "badge not_checked";
+    remoteBadge.textContent = "未检查";
+    $("version_remote_commit").textContent = "—";
+    $("version_remote_subject").textContent = "点击「检查更新」获取远端最新版本";
+    $("version_remote_meta").textContent = "";
+  } else {
+    $("version_remote_commit").textContent = info.remote_commit ? "v" + info.remote_commit : "—";
+    $("version_remote_subject").textContent = info.remote_message || "未读取到提交说明";
+    $("version_remote_meta").textContent = info.remote_date ? "提交于 " + fmtVersionTime(info.remote_date) : "";
+    remoteBadge.className = "badge " + (info.has_update ? "current-badge" : "available");
+    remoteBadge.textContent = info.has_update ? ("落后 " + info.commits_behind + " 个提交") : "已是最新";
+  }
+
+  const updateBtn = $("version_update_btn");
+  const canUpdate = !!(info && info.git_available !== false && info.is_git_repo);
+  if (!appUpdateRunning) {
+    // 有更新时主按钮为高亮的「立即更新」；已是最新时降级为备用的「强制重新拉取」
+    updateBtn.className = hasUpdate ? "btn btn-accent" : "btn";
+    updateBtn.dataset.force = hasUpdate ? "0" : "1";
+    updateBtn.disabled = !canUpdate;
+    updateBtn.textContent = hasUpdate ? "立即更新" : "强制重新拉取";
+  }
+
+  if (info && info.ok === false) {
+    setVersionStatus("bad", esc(info.error || "无法读取版本信息"));
+    return;
+  }
+  const dirtyNote = (info && info.local_dirty)
+    ? "<br>注意：安装目录存在未提交的本地改动，更新会以远端代码强制覆盖。"
+    : "";
+  if (!info || !info.checked_remote) {
+    setVersionStatus("", "本地版本已读取。点击「检查更新」连接 GitHub 获取远端最新版本。" + dirtyNote);
+  } else if (info.has_update) {
+    const extra = (info.commits_ahead > 0)
+      ? `<br>本地另有 <code>${info.commits_ahead}</code> 个提交领先于远端，更新后会被远端版本覆盖。`
+      : "";
+    setVersionStatus("update", `<strong>发现新版本</strong>：远端比当前多 <code>${info.commits_behind}</code> 个提交，可直接在此更新，服务会自动重启。` + extra + dirtyNote);
+  } else {
+    const aheadNote = (info.commits_ahead > 0)
+      ? `<br>本地有 <code>${info.commits_ahead}</code> 个提交未推送到远端（可能是本地修改）。`
+      : "";
+    setVersionStatus("ok", `<strong>已是最新版本</strong>：当前代码与远端 ${esc(info.branch || "")} 分支一致。` + aheadNote + dirtyNote);
+  }
+}
+
+async function loadAppVersionQuick() {
+  try {
+    const res = await fetch("./api/app_version", { cache: "no-store" });
+    const data = await res.json();
+    renderAppVersion(data);
+  } catch (e) {
+    // 静默失败：顶栏保留占位
+  }
+}
+
+async function checkAppVersion() {
+  if (appVersionBusy) return;
+  appVersionBusy = true;
+  const checkBtn = $("version_check_btn");
+  const prevHtml = checkBtn.innerHTML;
+  checkBtn.disabled = true;
+  checkBtn.innerHTML = '<span class="spinner-mini"></span>检查中';
+  setVersionStatus("", "正在连接 GitHub 获取远端最新版本...");
+  try {
+    const res = await fetch("./api/app_version?check=1", { cache: "no-store" });
+    const data = await res.json();
+    renderAppVersion(data);
+  } catch (err) {
+    setVersionStatus("bad", "连接服务器失败，请稍后重试。");
+  } finally {
+    appVersionBusy = false;
+    checkBtn.disabled = false;
+    checkBtn.innerHTML = prevHtml;
+  }
+}
+
+function openVersionModal() {
+  $("admin_dropdown").style.display = "none";
+  $("version_modal").style.display = "flex";
+  checkAppVersion();
+}
+
+function closeVersionModal() {
+  $("version_modal").style.display = "none";
+}
+
+function onVersionPrimaryAction() {
+  const btn = $("version_update_btn");
+  runAppUpdate(btn.dataset.force === "1");
+}
+
+async function runAppUpdate(force) {
+  if (appUpdateRunning) return;
+  if (force && !confirm("强制重新拉取会用远端代码覆盖安装目录中的代码（保留 vpngate_data 运行数据），确定继续？")) return;
+  appUpdateRunning = true;
+  const updateBtn = $("version_update_btn");
+  const checkBtn = $("version_check_btn");
+  const prevLabel = updateBtn.textContent;
+  updateBtn.className = "btn btn-accent";
+  updateBtn.disabled = true;
+  updateBtn.innerHTML = '<span class="spinner-mini"></span>正在更新';
+  checkBtn.disabled = true;
+  setVersionStatus("", "正在从 GitHub 拉取最新代码，请稍候（通常几秒，网络较慢时可能更久）...");
+  try {
+    const res = await fetch("./api/update_app", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: !!force })
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+
+    if (res.ok && data.ok && data.updated) {
+      applyVersionAfterUpdate(data);
+      const oldC = data.old_commit ? "v" + data.old_commit : "旧版本";
+      const newC = data.new_commit ? "v" + data.new_commit : "新版本";
+      startVersionReconnect(4, `更新成功（${esc(oldC)} → ${esc(newC)}）`);
+      return;
+    }
+
+    if (data.needs_force) {
+      setVersionStatus("warn", esc(data.message || "本地代码与远端不一致"));
+      checkBtn.disabled = false;
+      updateBtn.className = "btn";
+      updateBtn.dataset.force = "1";
+      updateBtn.disabled = false;
+      updateBtn.textContent = "强制重新拉取";
+      appUpdateRunning = false;
+      return;
+    }
+
+    if (res.ok && data.ok) {
+      setVersionStatus("ok", `<strong>${esc(data.message || "当前已是最新版本")}</strong>`);
+      checkBtn.disabled = false;
+      updateBtn.className = "btn";
+      updateBtn.dataset.force = "1";
+      updateBtn.disabled = false;
+      updateBtn.textContent = "强制重新拉取";
+      appUpdateRunning = false;
+      return;
+    }
+
+    setVersionStatus("bad", "更新失败：" + esc(data.error || data.message || "请稍后重试"));
+  } catch (err) {
+    setVersionStatus("bad", "请求更新失败，服务可能正在重启；若页面无响应请手动刷新并重新登录。");
+  }
+  appUpdateRunning = false;
+  checkBtn.disabled = false;
+  if (updateBtn.innerHTML.indexOf("spinner-mini") >= 0) updateBtn.textContent = prevLabel;
+}
+
+function startVersionReconnect(waitSeconds, lead) {
+  if (appReconnectTimer) clearInterval(appReconnectTimer);
+  let elapsed = 0;
+  const giveUpAfter = 90;
+  const head = lead || "更新已应用";
+  $("version_update_btn").className = "btn btn-accent";
+  $("version_update_btn").disabled = true;
+  $("version_update_btn").innerHTML = '<span class="spinner-mini"></span>等待服务重启';
+  appReconnectTimer = setInterval(async () => {
+    elapsed += 1;
+    if (elapsed <= waitSeconds) {
+      setVersionStatus("ok", `<strong>${head}</strong>，服务正在重启，约 <code>${waitSeconds - elapsed + 1}</code> 秒后自动刷新页面...（重启后需重新登录）`);
+      return;
+    }
+    setVersionStatus("ok", `<strong>${head}</strong>，服务正在重启，正在自动重连...（重启后需重新登录）`);
+    try {
+      const res = await fetch("./api/app_version", { cache: "no-store" });
+      if (res && res.status) {
+        clearInterval(appReconnectTimer);
+        appReconnectTimer = null;
+        window.location.reload();
+        return;
+      }
+    } catch (e) {}
+    if (elapsed >= waitSeconds + giveUpAfter) {
+      clearInterval(appReconnectTimer);
+      appReconnectTimer = null;
+      appUpdateRunning = false;
+      setVersionStatus("warn", "服务重启时间较长，请手动刷新页面（重启后需要重新登录）。");
+      $("version_check_btn").disabled = false;
+    }
+  }, 1000);
+}
+
+loadAppVersionQuick();
+
 // 每 10 秒在前台空闲时自动更新节点与状态，无需手动刷新页面
 setInterval(async () => {
   if (typeof state !== "undefined" && !state.is_connecting && (!testingNodeIds || !testingNodeIds.size) && document.visibilityState === "visible") {
@@ -5424,6 +5873,355 @@ def active_node_pinger() -> None:
         time.sleep(10)
 
 
+# ───────────────────────── 网页端版本检查与在线更新 ─────────────────────────
+# 与 `ml update` (install.sh update_service) 保持一致：
+#   git fetch origin  ->  对比本地 HEAD 与 origin/<当前分支>  ->  git reset --hard origin/<分支>
+#   ->  清理 __pycache__  ->  重启服务。
+# 失败时只返回错误信息，绝不改动工作区。
+APP_REPO_DIR: Path = ROOT_DIR
+APP_GIT_TIMEOUT_SECONDS = 20.0
+app_update_lock = threading.Lock()
+
+
+def _git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    # 后台更新不允许任何交互式输入（凭据、密码、host key 确认等）
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    askpass = shutil.which("true")
+    if askpass:
+        env["GIT_ASKPASS"] = askpass
+    return env
+
+
+def run_git(repo_dir: Path, args: list[str], timeout: float = APP_GIT_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
+    git_bin = shutil.which("git")
+    if not git_bin:
+        raise RuntimeError("服务器未安装 git 命令")
+    cmd = [git_bin, "-c", f"safe.directory={repo_dir}", "-C", str(repo_dir), *args]
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=_git_env(),
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def _git_output(repo_dir: Path, args: list[str], timeout: float = APP_GIT_TIMEOUT_SECONDS) -> str:
+    proc = run_git(repo_dir, args, timeout=timeout)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(detail[:300] or f"git {' '.join(args)} 执行失败")
+    return proc.stdout.strip()
+
+
+def _resolve_repo_dir(repo_dir: Path | None = None) -> Path:
+    return Path(repo_dir) if repo_dir else Path(APP_REPO_DIR)
+
+
+def _is_git_repo(repo_dir: Path) -> bool:
+    if not repo_dir.exists():
+        return False
+    try:
+        proc = run_git(repo_dir, ["rev-parse", "--is-inside-work-tree"], timeout=8.0)
+    except Exception:
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def _detect_branch(repo_dir: Path) -> str:
+    branch = ""
+    try:
+        branch = _git_output(repo_dir, ["rev-parse", "--abbrev-ref", "HEAD"], timeout=8.0)
+    except Exception:
+        branch = ""
+    if branch and branch != "HEAD":
+        return branch
+    # 与 install.sh 一致：分离 HEAD 时优先使用 origin/main、origin/master
+    for candidate in ("main", "master"):
+        for ref in (f"origin/{candidate}", candidate):
+            try:
+                if run_git(repo_dir, ["rev-parse", "--verify", "--quiet", ref], timeout=8.0).returncode == 0:
+                    return candidate
+            except Exception:
+                continue
+    return "main"
+
+
+def _commit_meta(repo_dir: Path, ref: str) -> dict[str, str]:
+    meta = {"commit": "", "commit_short": "", "date": "", "message": ""}
+    try:
+        raw = _git_output(repo_dir, ["log", "-1", "--format=%H%x1f%h%x1f%cI%x1f%s", ref], timeout=8.0)
+    except Exception:
+        return meta
+    if not raw:
+        return meta
+    parts = (raw.split("\x1f") + ["", "", "", ""])[:4]
+    meta["commit"] = parts[0].strip()
+    meta["commit_short"] = parts[1].strip()
+    meta["date"] = parts[2].strip()
+    meta["message"] = parts[3].strip()
+    return meta
+
+
+def _worktree_dirty(repo_dir: Path) -> bool:
+    try:
+        proc = run_git(repo_dir, ["status", "--porcelain", "--untracked-files=no"], timeout=10.0)
+    except Exception:
+        return False
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
+def _clean_pycache(repo_dir: Path) -> None:
+    # 与 install.sh 一致：更新后清理 Python 缓存，避免加载到旧的 .pyc
+    try:
+        for cache_dir in repo_dir.rglob("__pycache__"):
+            if cache_dir.is_dir():
+                shutil.rmtree(cache_dir, ignore_errors=True)
+    except Exception as exc:
+        print(f"[更新] 清理 __pycache__ 时出现问题: {exc}", flush=True)
+
+
+def collect_app_version(check_remote: bool = False, repo_dir: Path | None = None) -> dict[str, Any]:
+    """读取本地/远端版本信息。check_remote=True 时会执行 git fetch（只读，不修改工作区）。"""
+    repo = _resolve_repo_dir(repo_dir)
+    info: dict[str, Any] = {
+        "ok": True,
+        "git_available": shutil.which("git") is not None,
+        "repo_path": str(repo),
+        "is_git_repo": False,
+        "branch": "",
+        "current_commit": "",
+        "current_commit_full": "",
+        "current_date": "",
+        "current_message": "",
+        "remote_commit": "",
+        "remote_commit_full": "",
+        "remote_date": "",
+        "remote_message": "",
+        "commits_behind": 0,
+        "commits_ahead": 0,
+        "has_update": False,
+        "checked_remote": False,
+        "local_dirty": False,
+        "updating": app_update_lock.locked(),
+        "server_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "error": "",
+    }
+    if not info["git_available"]:
+        info["ok"] = False
+        info["error"] = "服务器未安装 git，无法检查或更新版本"
+        return info
+    if not _is_git_repo(repo):
+        info["ok"] = False
+        info["error"] = f"安装目录 {repo} 不是 Git 仓库，无法在线更新"
+        return info
+    try:
+        info["is_git_repo"] = True
+        branch = _detect_branch(repo)
+        info["branch"] = branch
+        local = _commit_meta(repo, "HEAD")
+        info["current_commit"] = local["commit_short"]
+        info["current_commit_full"] = local["commit"]
+        info["current_date"] = local["date"]
+        info["current_message"] = local["message"]
+        info["local_dirty"] = _worktree_dirty(repo)
+
+        if check_remote:
+            try:
+                fetch = run_git(repo, ["fetch", "--no-tags", "--prune", "origin"])
+            except subprocess.TimeoutExpired:
+                info["ok"] = False
+                info["error"] = f"连接远端超时（超过 {int(APP_GIT_TIMEOUT_SECONDS)} 秒），请稍后重试"
+                return info
+            except Exception as exc:
+                info["ok"] = False
+                info["error"] = f"拉取远端版本信息失败: {exc}"
+                return info
+            if fetch.returncode != 0:
+                detail = (fetch.stderr or fetch.stdout or "").strip().splitlines()
+                info["ok"] = False
+                info["error"] = "拉取远端版本信息失败: " + (detail[-1][:200] if detail else "网络不可用")
+                return info
+            remote_ref = f"origin/{branch}"
+            remote = _commit_meta(repo, remote_ref)
+            if not remote["commit"]:
+                info["ok"] = False
+                info["error"] = f"远端不存在分支 {remote_ref}"
+                return info
+            info["checked_remote"] = True
+            info["remote_commit"] = remote["commit_short"]
+            info["remote_commit_full"] = remote["commit"]
+            info["remote_date"] = remote["date"]
+            info["remote_message"] = remote["message"]
+            try:
+                behind = int(_git_output(repo, ["rev-list", "--count", f"HEAD..{remote_ref}"], timeout=10.0) or 0)
+            except Exception:
+                behind = 0
+            try:
+                ahead = int(_git_output(repo, ["rev-list", "--count", f"{remote_ref}..HEAD"], timeout=10.0) or 0)
+            except Exception:
+                ahead = 0
+            info["commits_behind"] = max(behind, 0)
+            info["commits_ahead"] = max(ahead, 0)
+            info["has_update"] = info["commits_behind"] > 0
+            info["diverged"] = info["has_update"] and info["commits_ahead"] > 0
+    except Exception as exc:
+        info["ok"] = False
+        info["error"] = str(exc)
+    return info
+
+
+def perform_app_update(force: bool = False, repo_dir: Path | None = None) -> dict[str, Any]:
+    """按 install.sh update_service() 的策略执行更新（fetch + reset --hard origin/<分支>）。
+
+    只负责改动代码，不负责重启进程；重启由调用方（HTTP Handler）安排。
+    """
+    repo = _resolve_repo_dir(repo_dir)
+    result: dict[str, Any] = {
+        "ok": True,
+        "updated": False,
+        "restart_needed": False,
+        "forced": bool(force),
+        "needs_force": False,
+        "branch": "",
+        "old_commit": "",
+        "new_commit": "",
+        "old_message": "",
+        "new_message": "",
+        "old_date": "",
+        "new_date": "",
+        "commits_behind": 0,
+        "message": "",
+        "error": "",
+    }
+    if not shutil.which("git"):
+        result["ok"] = False
+        result["error"] = "服务器未安装 git，无法在线更新"
+        return result
+    if not _is_git_repo(repo):
+        result["ok"] = False
+        result["error"] = f"安装目录 {repo} 不是 Git 仓库，无法在线更新"
+        return result
+    try:
+        branch = _detect_branch(repo)
+        result["branch"] = branch
+        old = _commit_meta(repo, "HEAD")
+        result["old_commit"] = old["commit_short"]
+        result["old_message"] = old["message"]
+        result["old_date"] = old["date"]
+        result["new_date"] = old["date"]
+
+        try:
+            fetch = run_git(repo, ["fetch", "--no-tags", "--prune", "origin"])
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"连接远端超时（超过 {int(APP_GIT_TIMEOUT_SECONDS)} 秒），请稍后重试")
+        if fetch.returncode != 0:
+            detail = (fetch.stderr or fetch.stdout or "").strip().splitlines()
+            raise RuntimeError("拉取远端代码失败: " + (detail[-1][:200] if detail else "网络不可用"))
+
+        remote_ref = f"origin/{branch}"
+        remote = _commit_meta(repo, remote_ref)
+        if not remote["commit"]:
+            raise RuntimeError(f"远端不存在分支 {remote_ref}")
+        try:
+            behind = int(_git_output(repo, ["rev-list", "--count", f"HEAD..{remote_ref}"], timeout=10.0) or 0)
+        except Exception:
+            behind = 0
+        result["commits_behind"] = max(behind, 0)
+        result["new_message"] = remote["message"]
+        result["new_date"] = remote["date"]
+
+        if not force:
+            if behind <= 0 and old["commit"] == remote["commit"]:
+                result["new_commit"] = old["commit_short"]
+                result["message"] = "当前已是最新版本"
+                return result
+            if behind <= 0:
+                result["ok"] = False
+                result["needs_force"] = True
+                result["new_commit"] = remote["commit_short"]
+                result["message"] = "本地代码与远端不一致（可能包含本地改动或领先的提交），如需强制对齐请使用强制更新"
+                return result
+
+        log_to_json(
+            "INFO",
+            "Main",
+            f"开始在线更新：{branch} {old['commit_short'] or '?'} -> {remote['commit_short']}（落后 {result['commits_behind']} 个提交）",
+        )
+        reset = run_git(repo, ["reset", "--hard", "--quiet", remote_ref], timeout=60.0)
+        if reset.returncode != 0:
+            detail = (reset.stderr or reset.stdout or "").strip().splitlines()
+            raise RuntimeError("应用远端代码失败: " + (detail[-1][:200] if detail else "未知错误"))
+
+        _clean_pycache(repo)
+        new = _commit_meta(repo, "HEAD")
+        result["new_commit"] = new["commit_short"]
+        result["new_message"] = new["message"]
+        result["new_date"] = new["date"]
+        result["updated"] = True
+        result["restart_needed"] = True
+        if old["commit"] == new["commit"]:
+            result["message"] = "已强制重新拉取代码（版本未变化），服务将在 2 秒内自动重启..."
+        else:
+            result["message"] = f"更新成功（{result['commits_behind']} 个新提交），服务将在 2 秒内自动重启..."
+        log_to_json(
+            "INFO",
+            "Main",
+            f"在线更新完成：{branch} {old['commit_short'] or '?'} -> {new['commit_short'] or '?'}，即将重启服务",
+        )
+    except Exception as exc:
+        result["ok"] = False
+        result["error"] = str(exc)
+        log_to_json("ERROR", "Main", f"在线更新失败: {exc}")
+    return result
+
+
+def service_restart_command() -> list[str] | None:
+    systemctl = shutil.which("systemctl")
+    if systemctl:
+        for unit in (
+            "/lib/systemd/system/aimilivpn.service",
+            "/etc/systemd/system/aimilivpn.service",
+            "/usr/lib/systemd/system/aimilivpn.service",
+        ):
+            if Path(unit).exists():
+                return [systemctl, "restart", "aimilivpn.service"]
+    rc_service = shutil.which("rc-service")
+    if rc_service and Path("/etc/init.d/aimilivpn").exists():
+        return [rc_service, "aimilivpn", "restart"]
+    return None
+
+
+def _exit_process() -> None:
+    """进程退出（独立函数便于测试与以后改为其他重启方式）。"""
+    os._exit(0)
+
+
+def schedule_app_restart(reason: str = "代码已更新", delay: float = 2.0) -> None:
+    """延后重启进程，让 HTTP 响应先回到浏览器（与 update_settings / update_credentials 相同的方式）。"""
+    def _worker() -> None:
+        time.sleep(delay)
+        cmd = service_restart_command()
+        if cmd:
+            try:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                print(f"[系统] {reason}，已请求重启服务: {' '.join(cmd)}", flush=True)
+                # 服务管理器应在数秒内结束本进程；若长时间未接管（未启用自动重启），主动退出兜底
+                time.sleep(20)
+                print(f"[系统] {reason}，进程仍未退出，主动退出以触发自动重启...", flush=True)
+                _exit_process()
+                return
+            except Exception as exc:
+                print(f"[警告] 重启服务命令执行失败: {exc}", flush=True)
+        print(f"[系统] {reason}，进程即将退出以触发自动重启...", flush=True)
+        _exit_process()
+
+    threading.Thread(target=_worker, daemon=True, name="app-restart").start()
+
+
 class Handler(BaseHTTPRequestHandler):
     def get_secret_path(self) -> str:
         ui_cfg = load_ui_config()
@@ -5676,6 +6474,13 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as e:
                     print(f"[API Logs] Error reading log file: {e}", flush=True)
             self.send_json({"logs": entries})
+        elif effective_path == "/api/app_version":
+            try:
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+                check = str((query.get("check") or [""])[0]).strip().lower() in ("1", "true", "yes", "on")
+                self.send_json(collect_app_version(check_remote=check))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         else:
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
@@ -5916,6 +6721,31 @@ class Handler(BaseHTTPRequestHandler):
                     auth_file.write_text(json.dumps(ui_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
                 
                 self.send_json({"ok": True, "favorite_node_ids": fav_ids})
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if effective_path == "/api/update_app":
+            try:
+                payload = self.read_json_body()
+                force = bool(payload.get("force"))
+                if not app_update_lock.acquire(blocking=False):
+                    self.send_json({"ok": False, "error": "已有更新任务正在进行，请稍后再试"}, HTTPStatus.CONFLICT)
+                    return
+                try:
+                    result = perform_app_update(force=force)
+                finally:
+                    app_update_lock.release()
+                if result.get("ok") and result.get("updated"):
+                    # 先把结果送回浏览器，再延后重启，避免响应被中断
+                    self.send_json(result)
+                    schedule_app_restart(
+                        reason=f"代码已更新 {result.get('old_commit') or '?'} -> {result.get('new_commit') or '?'}",
+                        delay=2.0,
+                    )
+                else:
+                    status = HTTPStatus.OK if result.get("ok") or result.get("needs_force") else HTTPStatus.BAD_REQUEST
+                    self.send_json(result, status)
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
