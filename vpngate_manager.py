@@ -9,6 +9,7 @@ import queue
 import re
 import select
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -1776,1396 +1777,2090 @@ def collector_loop() -> None:
 LOGIN_HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AimiliVPN - 安全登录</title>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-dark: #090d16;
-      --bg-surface: rgba(15, 23, 42, 0.45);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --text-primary: #f8fafc;
-      --text-secondary: #94a3b8;
-      --primary: #6366f1;
-      --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-      --primary-hover: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-      --success: #10b981;
-      --danger: #f43f5e;
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AimiliVPN - 安全登录</title>
+<meta name="theme-color" content="#05070c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e8ebf1" media="(prefers-color-scheme: light)">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem("theme");
+    if (t !== "light" && t !== "dark") {
+      t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
     }
+    if (t === "light") document.documentElement.classList.add("light");
+  } catch (e) {}
+})();
+</script>
+<style>
+  :root {
+    color-scheme: dark;
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ground: #05070c;
+    --ink: #f5f5f7;
+    --ink-2: #a9abb3;
+    --ink-3: #8b8d95;
+    --accent: #0a84ff;
+    --accent-2: #4da2ff;
+    --accent-fill: #0071e3;
+    --accent-fill-2: #0062c4;
+    --bad: #ff6b62;
+    --pane: rgba(16, 19, 26, 0.42);
+    --pane-line: rgba(255, 255, 255, 0.13);
+    --pane-sheen: rgba(255, 255, 255, 0.13);
+    --pane-spec: rgba(255, 255, 255, 0.70);
+    --blur: blur(28px) saturate(180%);
+    --shadow-pane: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.35), 0 18px 40px -18px rgba(0, 0, 0, 0.55), 0 44px 90px -50px rgba(0, 0, 0, 0.7);
+    --field: rgba(255, 255, 255, 0.04);
+    --field-line: rgba(255, 255, 255, 0.10);
+    --field-focus: rgba(10, 132, 255, 0.10);
+    --autofill-bg: #0d1118;
+    --ring: 0 0 0 4px rgba(10, 132, 255, 0.26);
+    --mesh-1: rgba(10, 132, 255, 0.34);
+    --mesh-2: rgba(191, 90, 242, 0.26);
+    --mesh-3: rgba(48, 209, 88, 0.16);
+    --aura-1: rgba(10, 132, 255, 0.42);
+    --aura-2: rgba(191, 90, 242, 0.32);
+    --aura-3: rgba(90, 200, 250, 0.24);
+    --aura-4: rgba(52, 132, 255, 0.44);
+    --tint: rgba(255, 255, 255, 0.08);
+    --tint-line: rgba(255, 255, 255, 0.12);
+    --scroll-thumb: rgba(255, 255, 255, 0.18);
+  }
 
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg-dark);
-      background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
+  html.light {
+    color-scheme: light;
+    --ground: #e8ebf1;
+    --ink: #12141a;
+    --ink-2: #4f545c;
+    --ink-3: #6b7079;
+    --accent: #0071e3;
+    --accent-2: #0a76dd;
+    --accent-fill: #0071e3;
+    --accent-fill-2: #0062c4;
+    --bad: #bd1420;
+    --pane: rgba(255, 255, 255, 0.66);
+    --pane-line: rgba(16, 20, 28, 0.10);
+    --pane-sheen: rgba(255, 255, 255, 0.75);
+    --pane-spec: rgba(255, 255, 255, 0.95);
+    --shadow-pane: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(18, 22, 30, 0.06), 0 16px 36px -18px rgba(18, 22, 30, 0.20), 0 40px 80px -50px rgba(18, 22, 30, 0.22);
+    --field: rgba(255, 255, 255, 0.58);
+    --field-line: rgba(16, 20, 28, 0.12);
+    --field-focus: rgba(0, 113, 227, 0.06);
+    --autofill-bg: #ffffff;
+    --ring: 0 0 0 4px rgba(0, 113, 227, 0.20);
+    --mesh-1: rgba(0, 113, 227, 0.18);
+    --mesh-2: rgba(160, 80, 230, 0.16);
+    --mesh-3: rgba(20, 160, 110, 0.14);
+    --aura-1: rgba(90, 175, 255, 0.45);
+    --aura-2: rgba(190, 125, 245, 0.34);
+    --aura-3: rgba(130, 220, 255, 0.34);
+    --aura-4: rgba(150, 200, 255, 0.30);
+    --tint: rgba(255, 255, 255, 0.62);
+    --tint-line: rgba(16, 20, 28, 0.10);
+    --scroll-thumb: rgba(16, 20, 28, 0.22);
+  }
 
-    .login-container {
-      width: 100%;
-      max-width: 400px;
-      padding: 24px;
-      box-sizing: border-box;
-    }
+  * { box-sizing: border-box; }
 
-    .login-card {
-      background: var(--bg-surface);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--border-color);
-      border-radius: 20px;
-      padding: 40px 32px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-      text-align: center;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
+  html, body { height: 100%; }
 
-    .brand-logo {
-      width: 64px;
-      height: 64px;
-      background: rgba(99, 102, 241, 0.1);
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 24px auto;
-      color: var(--primary);
-      position: relative;
-    }
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--ground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
-    .brand-logo::after {
-      content: '';
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      border-radius: 16px;
-      border: 1px solid var(--success);
-      opacity: 0.5;
-      animation: ripple 2s infinite ease-out;
-    }
+  ::selection { background: rgba(10, 132, 255, 0.30); }
+  html.light ::selection { background: rgba(0, 113, 227, 0.18); }
 
-    @keyframes ripple {
-      0% { transform: scale(1); opacity: 0.5; }
-      100% { transform: scale(1.3); opacity: 0; }
-    }
+  /* ── Ambient light field: the colour the glass refracts ───────────── */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: var(--ground);
+  }
+  .ambient::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background:
+      radial-gradient(46% 40% at 14% 6%, var(--mesh-1) 0%, transparent 68%),
+      radial-gradient(42% 40% at 86% 12%, var(--mesh-2) 0%, transparent 68%),
+      radial-gradient(52% 44% at 50% 96%, var(--mesh-3) 0%, transparent 72%);
+  }
+  .aura {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    filter: blur(90px);
+  }
+  .aura.a { width: 44vw; height: 44vw; left: -12vw; top: -14vw; background: var(--aura-1); }
+  .aura.b { width: 38vw; height: 38vw; right: -10vw; top: 4vw; background: var(--aura-2); }
+  .aura.c { width: 46vw; height: 46vw; left: 24vw; bottom: -26vw; background: var(--aura-3); }
+  .aura.d {
+    width: 34vmax;
+    height: 34vmax;
+    left: 50%;
+    top: 52%;
+    margin: -17vmax 0 0 -17vmax;
+    background: var(--aura-4);
+    filter: blur(70px);
+  }
 
-    .login-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text-primary);
-      margin: 0 0 8px 0;
-      letter-spacing: 0.5px;
-    }
+  /* ── Glass panel primitives ───────────────────────────────────────── */
+  .pane {
+    position: relative;
+    background: var(--pane);
+    border: 1px solid var(--pane-line);
+    border-radius: 28px;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow-pane);
+  }
+  .pane::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 14%;
+    right: 14%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--pane-spec), transparent);
+    pointer-events: none;
+  }
+  .pane::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--pane-sheen) 0%, transparent 34%);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .pane > * { position: relative; z-index: 1; }
 
-    .login-subtitle {
-      font-size: 14px;
-      color: var(--text-secondary);
-      margin: 0 0 32px 0;
-    }
+  /* ── Theme control ────────────────────────────────────────────────── */
+  .theme-toggle {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 30;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--tint-line);
+    background: var(--tint);
+    color: var(--ink-2);
+    cursor: pointer;
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    box-shadow: inset 0 1px 0 var(--pane-sheen), 0 6px 18px -10px rgba(0, 0, 0, 0.55);
+    transition: color 0.18s var(--ease), background 0.18s var(--ease), transform 0.18s var(--ease), border-color 0.18s var(--ease);
+  }
+  .theme-toggle:hover { color: var(--ink); border-color: var(--pane-line); transform: translateY(-1px); }
+  .theme-toggle:active { transform: scale(0.96); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .theme-toggle svg { width: 17px; height: 17px; }
+  html.light .icon-sun { display: none; }
+  html:not(.light) .icon-moon { display: none; }
 
-    .form-group {
-      margin-bottom: 20px;
-      text-align: left;
-    }
+  /* ── Stage & card ─────────────────────────────────────────────────── */
+  .stage {
+    min-height: 100%;
+    display: grid;
+    place-items: center;
+    padding: 32px 20px 40px;
+  }
 
-    .form-label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      margin-bottom: 8px;
-      margin-left: 4px;
-    }
+  .card {
+    width: 100%;
+    max-width: 392px;
+    padding: 34px 30px 30px;
+    border-radius: 28px;
+    animation: card-in 0.62s var(--ease) both;
+  }
 
-    .input-wrapper {
-      position: relative;
-    }
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+  }
 
-    .input-field {
-      width: 100%;
-      height: 48px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 0 16px;
-      box-sizing: border-box;
-      color: var(--text-primary);
-      font-family: inherit;
-      font-size: 15px;
-      outline: none;
-      transition: all 0.2s ease;
-    }
+  .mark {
+    width: 54px;
+    height: 54px;
+    margin: 0 auto 18px;
+    display: grid;
+    place-items: center;
+    border-radius: 17px;
+    color: var(--accent);
+    background:
+      linear-gradient(160deg, rgba(10, 132, 255, 0.28), rgba(10, 132, 255, 0.06) 62%, rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(10, 132, 255, 0.32);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 10px 22px -14px rgba(10, 132, 255, 0.9);
+  }
+  .mark svg { width: 26px; height: 26px; }
+  html.light .mark {
+    background: linear-gradient(160deg, rgba(0, 113, 227, 0.16), rgba(0, 113, 227, 0.04) 62%, rgba(255, 255, 255, 0.6));
+    border-color: rgba(0, 113, 227, 0.24);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 22px -16px rgba(0, 90, 190, 0.8);
+  }
 
-    .input-field:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-      background: rgba(15, 23, 42, 0.6);
-    }
+  .title {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.024em;
+    text-align: center;
+    color: var(--ink);
+  }
 
-    .error-message {
-      color: var(--danger);
-      font-size: 13px;
-      margin-top: 8px;
-      min-height: 18px;
-      text-align: left;
-      margin-left: 4px;
-      display: none;
-    }
+  .lead {
+    margin: 0 0 26px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    text-align: center;
+    color: var(--ink-2);
+  }
 
-    .login-btn {
-      width: 100%;
-      height: 48px;
-      background: var(--primary-gradient);
-      border: none;
-      border-radius: 10px;
-      color: white;
-      font-family: inherit;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
-    }
+  .field { margin-bottom: 14px; }
+  .field:last-of-type { margin-bottom: 0; }
 
-    .login-btn:hover {
-      background: var(--primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
-    }
+  .form-label {
+    display: block;
+    margin: 0 0 7px 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--ink-2);
+  }
 
-    .login-btn:active {
-      transform: translateY(1px);
-    }
+  .input-field {
+    width: 100%;
+    height: 46px;
+    padding: 0 14px;
+    border-radius: 13px;
+    border: 1px solid var(--field-line);
+    background: var(--field);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    letter-spacing: 0;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.10);
+    transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background 0.16s var(--ease);
+  }
+  .input-field::placeholder { color: var(--ink-3); }
+  .input-field:hover { border-color: rgba(10, 132, 255, 0.30); }
+  .input-field:focus {
+    border-color: var(--accent);
+    background: var(--field-focus);
+    box-shadow: var(--ring), inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  .input-field:-webkit-autofill,
+  .input-field:-webkit-autofill:hover,
+  .input-field:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--ink);
+    box-shadow: inset 0 0 0 100px var(--autofill-bg);
+    transition: background-color 9999s ease-out 0s;
+  }
 
-    .login-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none !important;
-    }
-  </style>
+  .error-message {
+    display: none;
+    margin: 10px 2px 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--bad);
+  }
+
+  .submit {
+    width: 100%;
+    height: 46px;
+    margin-top: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--accent-fill), var(--accent-fill-2));
+    color: #ffffff;
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 8px 18px -12px rgba(0, 45, 120, 0.75);
+    transition: filter 0.18s var(--ease), transform 0.14s var(--ease), box-shadow 0.18s var(--ease);
+  }
+  .submit:hover { filter: brightness(1.08); }
+  .submit:active { transform: scale(0.994); }
+  .submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .submit:disabled { opacity: 0.55; cursor: progress; filter: none; transform: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+
+  @media (max-width: 420px) {
+    .stage { padding: 24px 14px 28px; }
+    .card { padding: 28px 22px 24px; border-radius: 24px; }
+    .title { font-size: 20px; }
+    .theme-toggle { top: 12px; right: 12px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    * { transition-duration: 0.01ms !important; }
+  }
+</style>
 </head>
 <body>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="brand-logo">
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-      </div>
-      <h2 class="login-title">AimiliVPN</h2>
-      <p class="login-subtitle">请输入您的管理账号和安全密码以继续</p>
-      
-      <form id="login_form" onsubmit="handleLogin(event)">
-        <div class="form-group">
-          <label class="form-label" for="username">管理账号</label>
-          <div class="input-wrapper">
-            <input type="text" id="username" name="username" class="input-field" placeholder="请输入管理账号" required autocomplete="username">
-          </div>
-        </div>
-        <div class="form-group" style="margin-top: 16px;">
-          <label class="form-label" for="password">安全密码</label>
-          <div class="input-wrapper">
-            <input type="password" id="password" name="password" class="input-field" placeholder="请输入安全密码" required autocomplete="current-password">
-          </div>
-          <div id="error_text" class="error-message"></div>
-        </div>
-        
-        <button type="submit" id="submit_btn" class="login-btn">
-          <span>登录</span>
-        </button>
-      </form>
-    </div>
-  </div>
+<div class="ambient" aria-hidden="true"><span class="aura a"></span><span class="aura b"></span><span class="aura c"></span><span class="aura d"></span></div>
 
-  <script>
-    async function handleLogin(e) {
-      e.preventDefault();
-      const uname = document.getElementById("username").value.trim();
-      const pwd = document.getElementById("password").value.trim();
-      const errorText = document.getElementById("error_text");
-      const submitBtn = document.getElementById("submit_btn");
-      
-      errorText.style.display = "none";
-      submitBtn.disabled = true;
-      submitBtn.querySelector("span").textContent = "正在验证...";
-      
-      try {
-        const response = await fetch("./api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: uname, password: pwd })
-        });
-        
-        const data = await response.json();
-        if (response.ok && data.ok) {
-          window.location.reload();
-        } else {
-          errorText.textContent = data.error || "账号或密码不正确，请重新输入";
-          errorText.style.display = "block";
-          submitBtn.disabled = false;
-          submitBtn.querySelector("span").textContent = "登录";
-        }
-      } catch (err) {
-        errorText.textContent = "连接服务器失败，请稍后重试";
+<button id="theme_toggle" class="theme-toggle" type="button" onclick="toggleTheme()" title="切换深色/浅色" aria-label="切换深色/浅色">
+  <svg id="theme_icon" class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4.2"></circle>
+    <path d="M12 2.4v2.2M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.55 1.55M17.25 17.25l1.55 1.55M18.8 5.2l-1.55 1.55M6.75 17.25L5.2 18.8"></path>
+  </svg>
+  <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20.4 14.3A8.6 8.6 0 0 1 9.7 3.6a8.6 8.6 0 1 0 10.7 10.7z"></path>
+  </svg>
+</button>
+
+<main class="stage">
+  <section class="card pane" aria-labelledby="login_title">
+    <div class="mark" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3.2 5 6v5.4c0 4.2 2.8 7.6 7 9.4 4.2-1.8 7-5.2 7-9.4V6l-7-2.8z"></path>
+        <path d="M9.1 12.1l2.1 2.1 3.9-4.2"></path>
+      </svg>
+    </div>
+    <h1 class="title" id="login_title">AimiliVPN</h1>
+    <p class="lead">请输入您的管理账号和安全密码以继续</p>
+
+    <form id="login_form" onsubmit="handleLogin(event)">
+      <div class="field">
+        <label class="form-label" for="username">管理账号</label>
+        <input type="text" id="username" name="username" class="input-field" placeholder="请输入管理账号" required autocomplete="username" spellcheck="false" autocapitalize="off">
+      </div>
+      <div class="field">
+        <label class="form-label" for="password">安全密码</label>
+        <input type="password" id="password" name="password" class="input-field" placeholder="请输入安全密码" required autocomplete="current-password">
+      </div>
+      <div id="error_text" class="error-message" role="alert" aria-live="polite"></div>
+      <button type="submit" id="submit_btn" class="submit">
+        <span>登录</span>
+      </button>
+    </form>
+  </section>
+</main>
+
+<script>
+  function applyTheme(theme) {
+    var light = theme === "light";
+    document.documentElement.classList.toggle("light", light);
+    if (document.body) document.body.classList.toggle("light", light);
+  }
+
+  function toggleTheme() {
+    var next = document.documentElement.classList.contains("light") ? "dark" : "light";
+    applyTheme(next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const uname = document.getElementById("username").value.trim();
+    const pwd = document.getElementById("password").value.trim();
+    const errorText = document.getElementById("error_text");
+    const submitBtn = document.getElementById("submit_btn");
+
+    errorText.style.display = "none";
+    submitBtn.disabled = true;
+    submitBtn.querySelector("span").textContent = "正在验证...";
+
+    try {
+      const response = await fetch("./api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: uname, password: pwd })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.ok) {
+        window.location.reload();
+      } else {
+        errorText.textContent = data.error || "账号或密码不正确，请重新输入";
         errorText.style.display = "block";
         submitBtn.disabled = false;
         submitBtn.querySelector("span").textContent = "登录";
       }
+    } catch (err) {
+      errorText.textContent = "连接服务器失败，请稍后重试";
+      errorText.style.display = "block";
+      submitBtn.disabled = false;
+      submitBtn.querySelector("span").textContent = "登录";
     }
-  </script>
+  }
+</script>
 </body>
-</html>
-"""
+</html>"""
 
 INDEX_HTML = r"""<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AimiliVPN 节点池管理系统</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-    
-    :root {
-      --bg-dark: #0a0a0f;
-      --bg-surface: rgba(255, 255, 255, 0.06);
-      --bg-surface-hover: rgba(255, 255, 255, 0.10);
-      --border-color: rgba(255, 255, 255, 0.12);
-      --border-color-hover: rgba(255, 255, 255, 0.22);
-      --text-primary: #f5f5f7;
-      --text-secondary: #a1a1aa;
-      --primary: #0a84ff;
-      --primary-gradient: linear-gradient(135deg, #64d2ff 0%, #0a84ff 50%, #bf5af2 100%);
-      --primary-hover: linear-gradient(135deg, #7dd3fc 0%, #3b82f6 50%, #c084fc 100%);
-      --success: #30d158;
-      --success-gradient: linear-gradient(135deg, #32d74b 0%, #30d158 100%);
-      --danger: #ff453a;
-      --danger-gradient: linear-gradient(135deg, #ff6961 0%, #ff453a 100%);
-      --warning: #ff9f0a;
-      --warning-gradient: linear-gradient(135deg, #ffb340 0%, #ff9f0a 100%);
-      --active-row-bg: rgba(48, 209, 88, 0.08);
-      --active-row-border: rgba(48, 209, 88, 0.28);
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AimiliVPN 节点池管理系统</title>
+<meta name="theme-color" content="#05070c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e8ebf1" media="(prefers-color-scheme: light)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem("theme");
+    if (t !== "light" && t !== "dark") {
+      t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
     }
+    if (t === "light") document.documentElement.classList.add("light");
+  } catch (e) {}
+})();
+</script>
+<style>
+  :root {
+    color-scheme: dark;
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg-dark);
-      background-image: 
-        radial-gradient(at 15% 10%, rgba(100, 210, 255, 0.18) 0px, transparent 45%),
-        radial-gradient(at 85% 20%, rgba(191, 90, 242, 0.16) 0px, transparent 40%),
-        radial-gradient(at 50% 80%, rgba(10, 132, 255, 0.10) 0px, transparent 50%),
-        radial-gradient(at 80% 90%, rgba(48, 209, 88, 0.08) 0px, transparent 40%);
-      background-attachment: fixed;
-      color: var(--text-primary);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+    --ground: #05070c;
+    --ink: #f5f5f7;
+    --ink-2: #a9abb3;
+    --ink-3: #8b8d95;
+    --accent: #0a84ff;
+    --accent-2: #4da2ff;
+    --accent-ink: #ffffff;
+    --accent-fill: #0071e3;
+    --accent-fill-2: #0062c4;
+
+    --pane: rgba(20, 23, 31, 0.55);
+    --pane-strong: rgba(17, 20, 28, 0.86);
+    --pane-line: rgba(255, 255, 255, 0.10);
+    --pane-line-strong: rgba(255, 255, 255, 0.18);
+    --pane-sheen: rgba(255, 255, 255, 0.10);
+    --pane-spec: rgba(255, 255, 255, 0.50);
+    --blur: blur(28px) saturate(180%);
+    --shadow-pane: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.35), 0 18px 40px -20px rgba(0, 0, 0, 0.55), 0 44px 90px -56px rgba(0, 0, 0, 0.7);
+    --shadow-pop: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 48px -20px rgba(0, 0, 0, 0.7);
+    --shadow-modal: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 2px 8px rgba(0, 0, 0, 0.4), 0 40px 90px -30px rgba(0, 0, 0, 0.8);
+
+    --field: rgba(255, 255, 255, 0.045);
+    --field-line: rgba(255, 255, 255, 0.10);
+    --field-focus: rgba(10, 132, 255, 0.10);
+    --autofill-bg: #0d1118;
+    --ring: 0 0 0 4px rgba(10, 132, 255, 0.26);
+    --option-bg: #12161d;
+
+    --btn-tint: rgba(255, 255, 255, 0.06);
+    --btn-tint-line: rgba(255, 255, 255, 0.12);
+    --btn-tint-hover: rgba(255, 255, 255, 0.11);
+
+    --tile: rgba(255, 255, 255, 0.035);
+    --tile-hover: rgba(255, 255, 255, 0.065);
+    --tile-line: rgba(255, 255, 255, 0.07);
+
+    --line-soft: rgba(255, 255, 255, 0.055);
+    --thead-bg: rgba(255, 255, 255, 0.035);
+    --row-hover: rgba(255, 255, 255, 0.045);
+
+    --ok: #30d158;
+    --ok-ink: #5ee17f;
+    --ok-bg: rgba(48, 209, 88, 0.13);
+    --ok-line: rgba(48, 209, 88, 0.30);
+    --ok-ring: rgba(48, 209, 88, 0.18);
+    --warn: #ff9f0a;
+    --warn-ink: #ffb340;
+    --warn-bg: rgba(255, 159, 10, 0.14);
+    --warn-line: rgba(255, 159, 10, 0.30);
+    --bad: #ff453a;
+    --bad-ink: #ff7b73;
+    --bad-bg: rgba(255, 69, 58, 0.13);
+    --bad-line: rgba(255, 69, 58, 0.30);
+    --bad-fill: #c62d22;
+
+    --row-active-bg: rgba(48, 209, 88, 0.075);
+    --row-active-line: rgba(48, 209, 88, 0.35);
+
+    --note-bg: rgba(255, 255, 255, 0.035);
+    --note-line: rgba(255, 255, 255, 0.08);
+
+    --scrim: rgba(4, 6, 10, 0.55);
+    --menu-bg: rgba(20, 24, 32, 0.92);
+
+    --term-bg: #04060b;
+    --term-line: rgba(255, 255, 255, 0.07);
+    --term-shadow: inset 0 2px 22px rgba(0, 0, 0, 0.6);
+    --term-ink: #a9b6d6;
+    --log-default: #a9b6d6;
+    --log-proxy: #7cc7ff;
+    --log-vpn: #5ee17f;
+    --log-warn: #ffc45c;
+    --log-error: #ff867e;
+
+    --mesh-1: rgba(10, 132, 255, 0.32);
+    --mesh-2: rgba(191, 90, 242, 0.24);
+    --mesh-3: rgba(48, 209, 88, 0.14);
+    --aura-1: rgba(10, 132, 255, 0.40);
+    --aura-2: rgba(191, 90, 242, 0.30);
+    --aura-3: rgba(90, 200, 250, 0.22);
+
+    --scroll-thumb: rgba(255, 255, 255, 0.18);
+
+    /* legacy aliases — inline styles emitted by the dashboard script */
+    --bg-surface: var(--pane);
+    --bg-surface-hover: var(--tile-hover);
+    --border-color: var(--pane-line);
+    --border-color-hover: var(--pane-line-strong);
+    --text-primary: var(--ink);
+    --text-secondary: var(--ink-2);
+    --primary: var(--accent);
+    --primary-gradient: linear-gradient(180deg, var(--accent-2), var(--accent));
+    --success: var(--ok);
+    --success-gradient: linear-gradient(180deg, #109143, #0a6b32);
+    --danger: var(--bad);
+    --danger-gradient: linear-gradient(180deg, #c62d22, #a11b12);
+    --warning: var(--warn-ink);
+    --active-row-bg: var(--row-active-bg);
+    --active-row-border: var(--row-active-line);
+  }
+
+  html.light {
+    color-scheme: light;
+    --ground: #e8ebf1;
+    --ink: #12141a;
+    --ink-2: #4f545c;
+    --ink-3: #6b7079;
+    --accent: #0071e3;
+    --accent-2: #0a76dd;
+    --accent-fill: #0071e3;
+    --accent-fill-2: #0062c4;
+
+    --pane: rgba(255, 255, 255, 0.72);
+    --pane-strong: rgba(255, 255, 255, 0.95);
+    --pane-line: rgba(16, 20, 28, 0.10);
+    --pane-line-strong: rgba(16, 20, 28, 0.18);
+    --pane-sheen: rgba(255, 255, 255, 0.78);
+    --pane-spec: rgba(255, 255, 255, 0.95);
+    --shadow-pane: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(18, 22, 30, 0.06), 0 16px 36px -20px rgba(18, 22, 30, 0.20), 0 40px 80px -56px rgba(18, 22, 30, 0.22);
+    --shadow-pop: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 6px rgba(18, 22, 30, 0.08), 0 22px 44px -20px rgba(18, 22, 30, 0.28);
+    --shadow-modal: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 8px rgba(18, 22, 30, 0.10), 0 40px 90px -30px rgba(18, 22, 30, 0.35);
+
+    --field: rgba(255, 255, 255, 0.60);
+    --field-line: rgba(16, 20, 28, 0.12);
+    --field-focus: rgba(0, 113, 227, 0.05);
+    --autofill-bg: #ffffff;
+    --ring: 0 0 0 4px rgba(0, 113, 227, 0.20);
+    --option-bg: #ffffff;
+
+    --btn-tint: rgba(255, 255, 255, 0.62);
+    --btn-tint-line: rgba(16, 20, 28, 0.10);
+    --btn-tint-hover: rgba(255, 255, 255, 0.95);
+
+    --tile: rgba(255, 255, 255, 0.50);
+    --tile-hover: rgba(255, 255, 255, 0.85);
+    --tile-line: rgba(16, 20, 28, 0.08);
+
+    --line-soft: rgba(16, 20, 28, 0.06);
+    --thead-bg: rgba(255, 255, 255, 0.45);
+    --row-hover: rgba(255, 255, 255, 0.55);
+
+    --ok: #0d7a3d;
+    --ok-ink: #0b6b36;
+    --ok-bg: rgba(16, 150, 80, 0.12);
+    --ok-line: rgba(16, 150, 80, 0.26);
+    --ok-ring: rgba(16, 150, 80, 0.14);
+    --warn: #8a5100;
+    --warn-ink: #8a5100;
+    --warn-bg: rgba(200, 120, 0, 0.13);
+    --warn-line: rgba(200, 120, 0, 0.26);
+    --bad: #bd1420;
+    --bad-ink: #b3141f;
+    --bad-bg: rgba(190, 22, 34, 0.10);
+    --bad-line: rgba(190, 22, 34, 0.24);
+    --bad-fill: #b3141f;
+
+    --row-active-bg: rgba(16, 150, 80, 0.07);
+    --row-active-line: rgba(16, 150, 80, 0.32);
+
+    --note-bg: rgba(16, 20, 28, 0.035);
+    --note-line: rgba(16, 20, 28, 0.08);
+
+    --scrim: rgba(24, 30, 40, 0.32);
+    --menu-bg: rgba(255, 255, 255, 0.94);
+
+    --term-bg: #f5f6f9;
+    --term-line: rgba(16, 20, 28, 0.10);
+    --term-shadow: inset 0 1px 2px rgba(16, 20, 28, 0.05);
+    --term-ink: #33383f;
+    --log-default: #3a4048;
+    --log-proxy: #0b5fbf;
+    --log-vpn: #0b6b36;
+    --log-warn: #8a5100;
+    --log-error: #ad111d;
+
+    --mesh-1: rgba(0, 113, 227, 0.18);
+    --mesh-2: rgba(160, 80, 230, 0.16);
+    --mesh-3: rgba(20, 160, 110, 0.14);
+    --aura-1: rgba(90, 175, 255, 0.45);
+    --aura-2: rgba(190, 125, 245, 0.34);
+    --aura-3: rgba(130, 220, 255, 0.34);
+
+    --scroll-thumb: rgba(16, 20, 28, 0.22);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.004em;
+    color: var(--ink);
+    background: var(--ground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection { background: rgba(10, 132, 255, 0.30); }
+  html.light ::selection { background: rgba(0, 113, 227, 0.18); }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-3); background-clip: padding-box; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── Ambient light field ──────────────────────────────────────────── */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: var(--ground);
+    pointer-events: none;
+  }
+  .ambient::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background:
+      radial-gradient(46% 40% at 12% 4%, var(--mesh-1) 0%, transparent 66%),
+      radial-gradient(44% 40% at 88% 10%, var(--mesh-2) 0%, transparent 66%),
+      radial-gradient(52% 44% at 46% 98%, var(--mesh-3) 0%, transparent 72%);
+  }
+  .aura {
+    position: absolute;
+    display: block;
+    border-radius: 50%;
+    filter: blur(100px);
+  }
+  .aura.a { width: 42vw; height: 42vw; left: -14vw; top: -18vw; background: var(--aura-1); }
+  .aura.b { width: 34vw; height: 34vw; right: -8vw; top: 2vw; background: var(--aura-2); }
+  .aura.c { width: 48vw; height: 48vw; left: 26vw; bottom: -30vw; background: var(--aura-3); }
+
+  /* ── Glass primitives ─────────────────────────────────────────────── */
+  .pane {
+    position: relative;
+    background: var(--pane);
+    border: 1px solid var(--pane-line);
+    border-radius: 20px;
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow-pane);
+  }
+  .pane::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 18px;
+    right: 18px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--pane-spec), transparent);
+    opacity: 0.7;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .pane::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--pane-sheen) 0%, transparent 30%);
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .pane > * { position: relative; z-index: 1; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.85); opacity: 1; }
+    55% { transform: scale(1.55); opacity: 0.35; }
+    100% { transform: scale(0.85); opacity: 1; }
+  }
+  @keyframes modalFadeIn {
+    from { transform: translateY(10px) scale(0.985); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+
+  /* ── Top bar ──────────────────────────────────────────────────────── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "brand actions theme";
+    align-items: center;
+    gap: 14px;
+    padding: 12px 26px;
+    background: var(--pane);
+    border-bottom: 1px solid var(--pane-line);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: 0 1px 0 var(--pane-sheen) inset, 0 10px 30px -24px rgba(0, 0, 0, 0.6);
+    animation: rise 0.5s var(--ease-out) both;
+  }
+
+  .brand { grid-area: brand; min-width: 0; }
+  .brand-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+  .mark-sm {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    color: var(--accent);
+    background: linear-gradient(160deg, rgba(10, 132, 255, 0.26), rgba(10, 132, 255, 0.05) 70%);
+    border: 1px solid rgba(10, 132, 255, 0.30);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  }
+  html.light .mark-sm {
+    background: linear-gradient(160deg, rgba(0, 113, 227, 0.15), rgba(0, 113, 227, 0.03) 70%);
+    border-color: rgba(0, 113, 227, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  .mark-sm svg { width: 17px; height: 17px; }
+
+  h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .status {
+    display: none;
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  .status .badge { vertical-align: middle; margin: 0 3px; }
+
+  .status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 3px var(--ok-ring);
+    vertical-align: middle;
+  }
+
+  .actions {
+    grid-area: actions;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .topbar > #theme_toggle { grid-area: theme; }
+
+  /* ── Buttons ──────────────────────────────────────────────────────── */
+  .btn {
+    height: 34px;
+    padding: 0 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--btn-tint-line);
+    border-radius: 11px;
+    background: var(--btn-tint);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    backdrop-filter: blur(18px) saturate(170%);
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+    box-shadow: inset 0 1px 0 var(--pane-sheen);
+    transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease), transform 0.14s var(--ease);
+  }
+  .btn:hover { background: var(--btn-tint-hover); border-color: var(--pane-line-strong); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-accent:disabled { opacity: 0.8; filter: saturate(0.85); }
+
+  .btn svg { width: 14px; height: 14px; flex: none; }
+
+  .btn-accent {
+    border-color: transparent;
+    background: linear-gradient(180deg, var(--accent-fill), var(--accent-fill-2));
+    color: var(--accent-ink);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 6px 16px -12px rgba(0, 45, 120, 0.8);
+  }
+  .btn-accent:hover {
+    background: linear-gradient(180deg, var(--accent-fill), var(--accent-fill-2));
+    filter: brightness(1.08);
+    border-color: transparent;
+  }
+
+  #refresh::before {
+    content: "";
+    flex: none;
+    width: 14px;
+    height: 14px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%272.4%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M20%2011.5A8%208%200%201%201%2012%204%27%2F%3E%3Cpath%20d%3D%27M20%204.5v6h-6%27%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%272.4%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M20%2011.5A8%208%200%201%201%2012%204%27%2F%3E%3Cpath%20d%3D%27M20%204.5v6h-6%27%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+  }
+
+  .btn-danger {
+    height: 34px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 11px;
+    border: 1px solid var(--bad-line);
+    background: var(--bad-bg);
+    color: var(--bad-ink);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.16s var(--ease), transform 0.14s var(--ease);
+  }
+  .btn-danger:hover { background: var(--bad-fill); color: #fff; border-color: transparent; }
+  .btn-danger:active { transform: scale(0.98); }
+  .btn-danger svg { width: 15px; height: 15px; }
+
+  .icon-btn { width: 34px; padding: 0; border-radius: 11px; }
+  .icon-btn svg { width: 16px; height: 16px; }
+  html.light .icon-sun { display: none; }
+  html:not(.light) .icon-moon { display: none; }
+
+  .push-end { margin-left: auto; }
+
+  /* ── Dropdowns ────────────────────────────────────────────────────── */
+  .dropdown { position: relative; }
+  .dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 176px;
+    padding: 6px;
+    border-radius: 15px;
+    border: 1px solid var(--pane-line);
+    background: var(--menu-bg);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow-pop);
+    z-index: 500;
+    animation: modalFadeIn 0.18s var(--ease-out);
+  }
+  .dropdown-content a {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    color: var(--ink);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.14s var(--ease), color 0.14s var(--ease);
+  }
+  .dropdown-content a:hover { background: var(--row-hover); }
+  .dropdown-content a svg { width: 14px; height: 14px; flex: none; color: var(--ink-2); }
+  .dropdown-content a.danger-item { color: var(--bad-ink); margin-top: 4px; border-top: 1px solid var(--line-soft); border-radius: 0 0 10px 10px; }
+  .dropdown-content a.danger-item svg { color: var(--bad-ink); }
+  .dropdown-content a.danger-item:hover { background: var(--bad-bg); }
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 20px 26px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  main > * { animation: rise 0.55s var(--ease-out) both; }
+  main > *:nth-child(2) { animation-delay: 0.04s; }
+  main > *:nth-child(3) { animation-delay: 0.08s; }
+  main > *:nth-child(4) { animation-delay: 0.12s; }
+
+  /* ── Active node card ─────────────────────────────────────────────── */
+  .active-card {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    padding: 16px 18px;
+    border-radius: 20px;
+    border: 1px solid var(--pane-line);
+    background: var(--pane);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow-pane) !important;
+    transition: border-color 0.25s var(--ease), background 0.25s var(--ease);
+  }
+
+  .active-card::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 16px;
+    right: 16px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--pane-spec), transparent);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .active-card-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .active-card-details { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 200px; }
+
+  .active-card-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 0;
+  }
+  .active-card-title strong { font-weight: 600; color: var(--ink); }
+
+  .active-card-value {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .active-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .active-card-meta span strong { font-weight: 600; color: var(--ink); }
+
+  .stat-icon-wrapper {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    border: 1px solid var(--pane-line);
+    background: var(--tile);
+  }
+  .stat-icon { width: 20px; height: 20px; }
+
+  /* ── Toolbar ──────────────────────────────────────────────────────── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+
+  .select-wrap { position: relative; display: inline-flex; }
+
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 34px;
+    padding: 0 30px 0 12px;
+    border-radius: 11px;
+    border: 1px solid var(--field-line);
+    background-color: var(--field);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background-color 0.16s var(--ease);
+  }
+  select:hover { border-color: var(--pane-line-strong); }
+  select:focus { border-color: var(--accent); box-shadow: var(--ring); }
+  select option { background-color: var(--option-bg); color: var(--ink); }
+
+  .toolbar .select-wrap select { width: auto; min-width: 132px; }
+  .select-caret {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin-top: -6px;
+    color: var(--ink-3);
+    pointer-events: none;
+  }
+
+  .toolbar-btn.active {
+    border-color: transparent;
+    background: linear-gradient(180deg, var(--accent-fill), var(--accent-fill-2));
+    color: var(--accent-ink);
+  }
+
+  /* ── Favorites panel ──────────────────────────────────────────────── */
+  #favorites_panel { padding: 16px 18px; }
+
+  .fav-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .fav-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .fav-title svg { width: 15px; height: 15px; color: var(--warn-ink); }
+  .fav-desc {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .fav-body {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .check-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .check-row input[type="checkbox"] {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .check-row .check-text { display: flex; flex-direction: column; gap: 2px; }
+  .check-title { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .check-hint { font-size: 12px; color: var(--ink-2); }
+
+  #fav_fallback_warning {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    border: 1px solid var(--bad-line);
+    background: var(--bad-bg);
+    color: var(--bad-ink);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* ── Table ────────────────────────────────────────────────────────── */
+  .table-wrapper { overflow: hidden; }
+
+  .table-container { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    min-width: 840px;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    text-align: left;
+  }
+
+  thead th {
+    padding: 10px 16px;
+    background: var(--thead-bg);
+    border-bottom: 1px solid var(--pane-line);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  thead th:first-child { border-top-left-radius: 12px; }
+  thead th:last-child { border-top-right-radius: 12px; }
+
+  tbody td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 13px;
+    color: var(--ink);
+    vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+
+  tbody tr {
+    transition: background 0.14s var(--ease);
+  }
+  tbody tr:hover { background: var(--row-hover); }
+
+  tbody tr.active-row {
+    background: var(--row-active-bg) !important;
+    outline: 1px solid var(--row-active-line);
+    outline-offset: -1px;
+  }
+  tbody tr.active-row td { border-bottom-color: var(--row-active-line); }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  /* ── Badges ───────────────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    line-height: 1.45;
+    white-space: nowrap;
+    color: var(--ink-2);
+    background: var(--tile);
+    border-color: var(--tile-line);
+  }
+
+  .badge-pulse {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  .available {
+    color: var(--ok-ink);
+    background: var(--ok-bg);
+    border-color: var(--ok-line);
+  }
+  .unavailable {
+    color: var(--bad-ink);
+    background: var(--bad-bg);
+    border-color: var(--bad-line);
+  }
+  .not_checked {
+    color: var(--warn-ink);
+    background: var(--warn-bg);
+    border-color: var(--warn-line);
+  }
+  .current-badge {
+    color: var(--accent);
+    background: rgba(10, 132, 255, 0.12);
+    border-color: rgba(10, 132, 255, 0.28);
+  }
+
+  .latency-val {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .latency-good { color: var(--ok-ink); background: var(--ok-bg); }
+  .latency-medium { color: var(--warn-ink); background: var(--warn-bg); }
+  .latency-poor { color: var(--bad-ink); background: var(--bad-bg); }
+
+  /* ── Row actions ──────────────────────────────────────────────────── */
+  .table-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .connect-btn,
+  .test-btn {
+    height: 28px;
+    padding: 0 11px;
+    border-radius: 9px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.12s var(--ease);
+  }
+  .connect-btn {
+    border: 1px solid rgba(10, 132, 255, 0.34);
+    background: rgba(10, 132, 255, 0.10);
+    color: var(--accent);
+  }
+  html.light .connect-btn {
+    border-color: rgba(0, 113, 227, 0.30);
+    background: rgba(0, 113, 227, 0.08);
+    color: var(--accent);
+  }
+  .connect-btn:hover:not(:disabled) { background: var(--accent-fill); color: #fff; border-color: transparent; }
+  .connect-btn:active:not(:disabled) { transform: scale(0.97); }
+
+  .test-btn {
+    border: 1px solid var(--btn-tint-line);
+    background: var(--btn-tint);
+    color: var(--ink-2);
+  }
+  .test-btn:hover:not(:disabled) { background: var(--btn-tint-hover); color: var(--ink); border-color: var(--pane-line-strong); }
+  .test-btn:active:not(:disabled) { transform: scale(0.97); }
+
+  .connect-btn:disabled,
+  .test-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Pagination ───────────────────────────────────────────────────── */
+  .pagination-container {
+    padding: 12px 16px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--pane-line);
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+  .pager { display: flex; align-items: center; gap: 6px; }
+  .btn-sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 9px; }
+
+  /* ── Modals ───────────────────────────────────────────────────────── */
+  .modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    padding: 28px 20px;
+    overflow-y: auto;
+    align-items: center;
+    justify-content: center;
+    background: var(--scrim);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+  }
+
+  .modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    padding: 22px;
+    border-radius: 24px;
+    border: 1px solid var(--pane-line);
+    background: var(--pane-strong);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: var(--shadow-modal);
+    animation: modalFadeIn 0.3s var(--ease-out) both;
+    margin: auto;
+  }
+  .modal-content::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 22%;
+    right: 22%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--pane-spec), transparent);
+    opacity: 0.8;
+    pointer-events: none;
+  }
+
+  .modal-wide { max-width: 560px; }
+  .modal-xl { max-width: 780px; }
+
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .modal-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+  }
+  .modal-title svg { width: 18px; height: 18px; color: var(--accent); }
+
+  .modal-close {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease);
+  }
+  .modal-close:hover { background: var(--tile-hover); color: var(--ink); }
+  .modal-close svg { width: 16px; height: 16px; }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  /* ── Forms ────────────────────────────────────────────────────────── */
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    display: block;
+    margin: 0 0 7px 2px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    letter-spacing: 0.01em;
+  }
+
+  .input-field {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 11px;
+    border: 1px solid var(--field-line);
+    background-color: var(--field);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 13.5px;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+    transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background-color 0.16s var(--ease);
+  }
+  .input-field::placeholder { color: var(--ink-3); }
+  .input-field:hover { border-color: var(--pane-line-strong); }
+  .input-field:focus { border-color: var(--accent); background-color: var(--field-focus); box-shadow: var(--ring); }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+
+  select.input-field {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%237d7f88%27%20stroke-width%3D%272.2%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M6%209l6%206%206-6%27%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 12px 12px;
+  }
+
+  .form-alert {
+    margin-bottom: 14px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .form-alert.error { color: var(--bad-ink); background: var(--bad-bg); border: 1px solid var(--bad-line); }
+  .form-alert.success { color: var(--ok-ink); background: var(--ok-bg); border: 1px solid var(--ok-line); }
+
+  .divider {
+    margin: 18px 0;
+    border: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .note {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    border: 1px solid var(--note-line);
+    background: var(--note-bg);
+    color: var(--ink-2);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .note strong { color: var(--ink); font-weight: 600; }
+
+  /* ── Version pill & update modal ──────────────────────────────────── */
+  .version-pill {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease);
+  }
+  .version-pill:hover { color: var(--ink); background: var(--tile-hover); border-color: var(--pane-line-strong); }
+  .version-pill:active { transform: scale(0.98); }
+  .version-pill.has-update {
+    color: var(--accent);
+    background: rgba(10, 132, 255, 0.12);
+    border-color: rgba(10, 132, 255, 0.30);
+  }
+  html.light .version-pill.has-update {
+    background: rgba(0, 113, 227, 0.09);
+    border-color: rgba(0, 113, 227, 0.26);
+  }
+  .version-pill .version-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  .version-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .version-card {
+    padding: 13px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+    box-shadow: inset 0 1px 0 var(--pane-sheen);
+    min-width: 0;
+  }
+  .version-card.is-current { border-color: rgba(10, 132, 255, 0.22); }
+  html.light .version-card.is-current { border-color: rgba(0, 113, 227, 0.20); }
+  .version-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+  .version-card-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .version-card .badge { font-size: 11px; padding: 1.5px 8px; }
+  .version-commit {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .version-subject {
+    margin-top: 7px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 39px;
+    word-break: break-word;
+  }
+  .version-meta {
+    margin-top: 7px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .version-status {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    border: 1px solid var(--note-line);
+    background: var(--note-bg);
+    color: var(--ink-2);
+    font-size: 12.5px;
+    line-height: 1.6;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .version-status svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+  .version-status strong { color: var(--ink); font-weight: 600; }
+  .version-status code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink);
+  }
+  html.light .version-status code { background: rgba(16, 20, 28, 0.06); }
+  .version-status.is-update { border-color: rgba(10, 132, 255, 0.28); background: rgba(10, 132, 255, 0.08); color: var(--ink); }
+  html.light .version-status.is-update { border-color: rgba(0, 113, 227, 0.24); background: rgba(0, 113, 227, 0.06); }
+  .version-status.is-ok { border-color: var(--ok-line); background: var(--ok-bg); color: var(--ok-ink); }
+  .version-status.is-bad { border-color: var(--bad-line); background: var(--bad-bg); color: var(--bad-ink); }
+  .version-status.is-warn { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); }
+  .version-status.is-update strong,
+  .version-status.is-ok strong,
+  .version-status.is-bad strong,
+  .version-status.is-warn strong { color: inherit; }
+
+  .spinner-mini {
+    width: 13px;
+    height: 13px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.6px solid currentColor;
+    border-right-color: transparent;
+    animation: spin 0.7s linear infinite;
+    opacity: 0.85;
+  }
+
+  /* ── Option cards ─────────────────────────────────────────────────── */
+  .option-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .option-card {
+    padding: 10px 11px;
+    border-radius: 11px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+    cursor: pointer;
+    user-select: none;
+    text-align: left;
+    transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+  }
+  .option-card:hover { background: var(--tile-hover); border-color: var(--pane-line-strong); }
+  .option-card.active {
+    border-color: var(--accent);
+    background: rgba(10, 132, 255, 0.10);
+    box-shadow: inset 0 1px 0 var(--pane-sheen);
+  }
+  html.light .option-card.active { background: rgba(0, 113, 227, 0.07); }
+
+  .option-card-title { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .option-card-desc { margin-top: 2px; font-size: 11px; line-height: 1.4; color: var(--ink-2); }
+
+  /* ── VPS recommendation ───────────────────────────────────────────── */
+  .vps-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .vps-item {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+    transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+  }
+  .vps-item:hover { background: var(--tile-hover); border-color: var(--pane-line-strong); }
+  .vps-tag {
+    width: fit-content;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+  }
+  .tag-normal { color: var(--accent); background: rgba(10, 132, 255, 0.10); border-color: rgba(10, 132, 255, 0.24); }
+  html.light .tag-normal { color: var(--accent); background: rgba(0, 113, 227, 0.08); border-color: rgba(0, 113, 227, 0.20); }
+  .tag-premium { color: var(--ok-ink); background: var(--ok-bg); border-color: var(--ok-line); }
+  .vps-desc { flex: 1; font-size: 12px; line-height: 1.6; color: var(--ink-2); }
+  .vps-btn {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--btn-tint-line);
+    background: var(--btn-tint);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    transition: background 0.16s var(--ease), color 0.16s var(--ease), border-color 0.16s var(--ease);
+  }
+  .vps-btn:hover { background: var(--accent-fill); color: #fff; border-color: transparent; }
+  .vps-footer {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .vps-footer.left { text-align: left; line-height: 1.65; }
+  .forum-link { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .forum-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  .donate-label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .donate-label svg { width: 15px; height: 15px; color: var(--accent); }
+  .donate-box {
+    padding: 9px 11px;
+    border-radius: 10px;
+    border: 1px solid var(--note-line);
+    background: var(--note-bg);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--ink-2);
+    word-break: break-all;
+    user-select: all;
+  }
+  .donate-box b { color: var(--ink); font-weight: 600; }
+
+  /* ── Gateway ──────────────────────────────────────────────────────── */
+  #gateway_services_list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px; }
+  #gateway_services_list > div {
+    padding: 12px 16px;
+    background: var(--tile) !important;
+    border: 1px solid var(--tile-line) !important;
+    border-radius: 12px !important;
+  }
+
+  .proxy-box {
+    padding: 13px;
+    border-radius: 14px;
+    border: 1px solid var(--tile-line);
+    background: var(--tile);
+  }
+  .proxy-box-head { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+  .proxy-box-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .proxy-box-head p { margin: 2px 0 0; font-size: 12px; color: var(--ink-2); }
+  .proxy-readout {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: 11px;
+    border: 1px solid var(--note-line);
+    background: var(--note-bg);
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .proxy-readout .mono { font-size: 12px; }
+
+  /* ── Logs ─────────────────────────────────────────────────────────── */
+  .logs-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .logs-head .modal-title { margin-right: auto; }
+
+  #log_filter_select {
+    width: 150px;
+    height: 32px;
+    font-size: 12px;
+  }
+  .logs-head .form-label { margin: 0 2px 0 4px; white-space: nowrap; }
+
+  .log-terminal {
+    height: 400px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    overflow-y: auto;
+    border-radius: 14px;
+    border: 1px solid var(--term-line);
+    background: var(--term-bg);
+    box-shadow: var(--term-shadow);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.65;
+    color: var(--term-ink);
+    white-space: pre-wrap;
+    word-break: break-all;
+    text-align: left;
+  }
+  .log-empty { color: var(--ink-3); text-align: center; padding-top: 150px; }
+
+  .logs-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .logs-foot .group { display: flex; gap: 8px; }
+
+  /* ── Responsive ───────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .topbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "brand theme"
+        "actions actions";
+      gap: 10px 12px;
+      padding: 12px 16px;
     }
-
-    header {
-      padding: 16px 32px;
-      background: rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(28px) saturate(180%);
-      -webkit-backdrop-filter: blur(28px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .brand {
-      display: flex;
-      flex-direction: column;
-    }
-
-    h1 {
-      font-size: 20px;
-      font-weight: 700;
-      margin: 0;
-      background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      letter-spacing: -0.5px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .status {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-top: 4px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 10px var(--success);
-      display: inline-block;
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 12px;
-    }
-
-    button, .btn-telegram {
-      height: 38px;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0 16px;
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-primary);
-      white-space: nowrap;
-      text-decoration: none;
-      box-sizing: border-box;
-    }
-
-    button:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.15);
-      transform: translateY(-1px);
-    }
-
-    .btn-telegram {
-      background: rgba(43, 162, 223, 0.15);
-      border: 1px solid rgba(43, 162, 223, 0.3);
-      color: #2ba2df;
-    }
-
-    .btn-telegram:hover {
-      background: rgba(43, 162, 223, 0.25);
-      border-color: rgba(43, 162, 223, 0.5);
-      color: #2ba2df;
-      transform: translateY(-1px);
-    }
-
-    .btn-primary {
-      background: var(--primary-gradient);
-      color: white;
-      border: none;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-    }
-
-    .btn-primary:hover {
-      background: var(--primary-hover);
-      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
-    }
-
-    .btn-danger {
-      background: var(--danger-gradient);
-      color: white;
-      border: none;
-      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2);
-    }
-
-    .btn-danger:hover {
-      opacity: 0.95;
-      box-shadow: 0 6px 16px rgba(244, 63, 94, 0.35);
-    }
-
-    button:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none !important;
-      box-shadow: none !important;
-    }
-
-    main {
-      padding: 24px 32px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .active-card {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(79, 70, 229, 0.04) 100%);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      border-radius: 16px;
-      padding: 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 24px;
-      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.12);
-      transition: all 0.3s ease;
+    .actions {
       width: 100%;
-      box-sizing: border-box;
-    }
-    
-    .active-card-info {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      flex-wrap: wrap;
-    }
-    
-    .active-card-details {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    
-    .active-card-title {
-      font-size: 14px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #a5b4fc;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .active-card-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    
-    .active-card-meta {
-      display: flex;
-      gap: 16px;
-      font-size: 13px;
-      color: var(--text-secondary);
-      flex-wrap: wrap;
-    }
-
-    .active-card-meta span strong {
-      color: var(--text-primary);
-    }
-
-    .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .stat {
-      background: var(--bg-surface);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-      overflow: hidden;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .stat:hover {
-      background: var(--bg-surface-hover);
-      border-color: var(--border-color-hover);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
-    }
-
-    .stat-info {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .stat strong {
-      font-size: 32px;
-      font-weight: 700;
-      display: block;
-      margin-bottom: 4px;
-      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .stat span {
-      font-size: 13px;
-      color: var(--text-secondary);
-      font-weight: 500;
-    }
-
-    .stat-icon-wrapper {
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.04);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .stat-icon {
-      width: 22px;
-      height: 22px;
-      color: var(--primary);
-    }
-
-    .stat:nth-child(2) .stat-icon { color: var(--warning); }
-    .stat:nth-child(3) .stat-icon { color: var(--success); }
-
-    /* New style additions */
-    .header-badge-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      color: var(--text-secondary);
-      text-decoration: none;
-      font-size: 12px;
-      font-weight: 600;
-      transition: all 0.2s ease;
-      height: 24px;
-      box-sizing: border-box;
-    }
-    .header-badge-link:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: var(--border-color-hover);
-      color: var(--text-primary);
-      transform: translateY(-1px);
-    }
-    .flex-row-container {
-      display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
-      margin-bottom: 24px;
-    }
-    .flex-row-container > * {
-      flex: 1;
-      min-width: 320px;
-      margin-bottom: 0 !important;
-    }
-    .vps-recommend-tab {
-      position: fixed;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 38px;
-      background: var(--primary-gradient);
-      border: 1px solid var(--border-color-hover);
-      border-right: none;
-      border-radius: 8px 0 0 8px;
-      padding: 16px 6px;
-      color: white;
-      font-weight: 700;
-      font-size: 13px;
-      line-height: 1.4;
-      text-align: center;
-      cursor: pointer;
-      z-index: 999;
-      box-shadow: -4px 0 20px rgba(99, 102, 241, 0.3);
-      transition: all 0.3s ease;
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-    }
-    .vps-recommend-tab:hover {
-      padding-right: 10px;
-      box-shadow: -4px 0 25px rgba(99, 102, 241, 0.5);
-    }
-
-    .vps-links {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-    }
-    
-    @media (max-width: 576px) {
-      .vps-links {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    .vps-item {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      border-radius: 12px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      justify-content: space-between;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    }
-    
-    .vps-item:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(99, 102, 241, 0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.1);
-    }
-    
-    .vps-tag {
-      font-size: 11px;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 6px;
-      width: fit-content;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    .tag-normal {
-      background: rgba(99, 102, 241, 0.15);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.2);
-    }
-    
-    .tag-premium {
-      background: rgba(16, 185, 129, 0.15);
-      color: #6ee7b7;
-      border: 1px solid rgba(16, 185, 129, 0.2);
-    }
-    
-    .vps-desc {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.6;
-      flex: 1;
-    }
-    
-    .vps-btn {
-      align-self: stretch;
-      text-decoration: none;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: var(--text-primary);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 8px 16px;
-      border-radius: 8px;
-      transition: all 0.2s ease;
-      text-align: center;
-    }
-    
-    .vps-item:hover .vps-btn {
-      background: var(--primary-gradient);
-      border-color: transparent;
-      color: white;
-      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2);
-    }
-    
-    .vps-footer {
-      border-top: 1px dashed rgba(255, 255, 255, 0.08);
-      padding-top: 12px;
-      font-size: 13px;
-      color: var(--text-secondary);
-      text-align: center;
-    }
-    
-    .forum-link {
-      color: #818cf8;
-      font-weight: 700;
-      text-decoration: none;
-      transition: color 0.2s ease;
-    }
-    
-    .forum-link:hover {
-      color: #a5b4fc;
-      text-decoration: underline;
-    }
-
-    .toolbar {
-      background: var(--bg-surface);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 24px;
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .toolbar select {
-      width: 180px;
-      height: 42px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0 12px;
-      color: var(--text-primary);
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-      transition: all 0.2s ease;
-      cursor: pointer;
-    }
-
-    .toolbar select:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-      background: #0f172a;
-    }
-
-    .toolbar input {
-      flex: 1;
-      min-width: 250px;
-      height: 42px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0 16px;
-      color: var(--text-primary);
-      font-family: inherit;
-      font-size: 14px;
-      transition: all 0.2s ease;
-    }
-
-    .toolbar input:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-      background: rgba(15, 23, 42, 0.8);
-    }
-
-    .table-wrapper {
-      background: var(--bg-surface);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    }
-
-    .table-container {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      table-layout: fixed;
-    }
-
-    th, td {
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--border-color);
-      font-size: 14px;
-    }
-
-    th {
-      background: rgba(17, 24, 39, 0.4);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--text-secondary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    tr {
-      transition: background 0.2s ease;
-    }
-
-    tr:hover {
-      background: rgba(255, 255, 255, 0.015);
-    }
-
-    .active-row {
-      background: var(--active-row-bg) !important;
-      outline: 2px solid var(--success) !important;
-      outline-offset: -2px;
-      position: relative;
-      z-index: 5;
-    }
-
-    .active-row td {
-      border-bottom: 1px solid var(--active-row-border);
-      border-top: 1px solid var(--active-row-border);
-    }
-
-    .badge {
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid transparent;
-    }
-
-    .badge-pulse {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-      animation: pulse 1.5s infinite;
-      display: inline-block;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(0.9); opacity: 1; }
-      50% { transform: scale(1.6); opacity: 0.4; }
-      100% { transform: scale(0.9); opacity: 1; }
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    .available {
-      background: rgba(16, 185, 129, 0.1);
-      color: #34d399;
-      border-color: rgba(16, 185, 129, 0.2);
-    }
-
-    .unavailable {
-      background: rgba(244, 63, 94, 0.1);
-      color: #fb7185;
-      border-color: rgba(244, 63, 94, 0.2);
-    }
-
-    .not_checked {
-      background: rgba(245, 158, 11, 0.1);
-      color: #fbbf24;
-      border-color: rgba(245, 158, 11, 0.2);
-    }
-
-    .current-badge {
-      background: rgba(99, 102, 241, 0.15);
-      color: #818cf8;
-      border-color: rgba(99, 102, 241, 0.3);
-    }
-
-    .table-actions {
-      display: flex;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
     }
+    .actions .btn { width: 100%; }
+    main { padding: 16px 16px 48px; }
+    .active-card { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .active-card > .btn-danger { width: 100%; }
+    .active-card-meta { font-size: 12px; }
+  }
 
-    .connect-btn {
-      background: transparent;
-      color: #818cf8;
-      border: 1px solid rgba(99, 102, 241, 0.4);
-      border-radius: 6px;
-      padding: 0 12px;
-      height: 30px;
-      font-size: 12px;
-      font-weight: 600;
-      transition: all 0.2s ease;
-      cursor: pointer;
-    }
+  @media (max-width: 620px) {
+    .brand-line h1 { font-size: 14.5px; }
+    .version-pill { height: 20px; padding: 0 8px; font-size: 10px; }
+    .version-grid { grid-template-columns: 1fr; }
+    .version-subject { min-height: 0; -webkit-line-clamp: 3; }
+    .btn { height: 32px; padding: 0 11px; font-size: 12px; }
+    .icon-btn { width: 32px; padding: 0; }
+    .toolbar { padding: 9px; }
+    .toolbar .select-wrap { flex: 1 1 46%; }
+    .toolbar .select-wrap select { width: 100%; }
+    .toolbar-btn.push-end { margin-left: 0; width: 100%; }
+    .option-group { grid-template-columns: 1fr; }
+    .vps-links { grid-template-columns: 1fr; }
+    .modal { padding: 14px 12px; align-items: flex-start; }
+    .modal-content { padding: 18px; border-radius: 20px; }
+    .logs-foot .group { width: 100%; }
+    .logs-foot .group .btn { flex: 1; }
+    #logs_modal .log-terminal { height: 320px; }
+    .pager { width: 100%; justify-content: space-between; }
+    .table-container table { min-width: 720px; }
+    thead th { padding: 9px 12px; }
+    tbody td { padding: 10px 12px; }
+  }
 
-    .connect-btn:hover:not(:disabled) {
-      background: var(--primary-gradient);
-      color: white;
-      border-color: transparent;
-      box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
     }
-
-    .connect-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .test-btn {
-      background: transparent;
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.4);
-      border-radius: 6px;
-      padding: 0 12px;
-      height: 30px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .test-btn:hover:not(:disabled) {
-      background: var(--success-gradient);
-      color: white;
-      border-color: transparent;
-      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
-    }
-
-    .test-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .mono {
-      font-family: 'JetBrains Mono', Consolas, monospace;
-      font-size: 13px;
-      color: #e2e8f0;
-    }
-
-    .latency-val {
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-
-    .latency-good {
-      background: rgba(16, 185, 129, 0.1);
-      color: #34d399;
-    }
-    
-    .latency-medium {
-      background: rgba(245, 158, 11, 0.1);
-      color: #fbbf24;
-    }
-    
-    .latency-poor {
-      background: rgba(244, 63, 94, 0.1);
-      color: #fb7185;
-    }
-
-    @media (max-width: 768px) {
-      header {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 16px 20px;
-      }
-      .btn-group {
-        width: 100%;
-        margin-top: 12px;
-      }
-      .btn-group button, .btn-group .btn-telegram {
-        flex: 1;
-      }
-      .btn-group .dropdown {
-        flex: 1;
-        display: flex;
-      }
-      .btn-group .dropdown button {
-        width: 100%;
-        flex: 1;
-      }
-      main {
-        padding: 16px 20px;
-      }
-      .active-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 16px;
-      }
-      .active-card button {
-        width: 100%;
-      }
-    }
-    
-    /* Admin dropdown styles */
-    .dropdown {
-      position: relative;
-      display: inline-block;
-    }
-    .dropdown-content {
-      display: none;
-      position: absolute;
-      right: 0;
-      margin-top: 6px;
-      min-width: 140px;
-      background: rgba(22, 30, 49, 0.95);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-      z-index: 1000;
-      overflow: hidden;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-    .dropdown-content a {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      color: var(--text-primary);
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 500;
-      transition: background 0.2s;
-    }
-    .dropdown-content a:hover {
-      background: rgba(255,255,255,0.08);
-    }
-    
-    /* Modal styles */
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 10000;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      background-color: rgba(9, 13, 22, 0.7);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      align-items: center;
-      justify-content: center;
-    }
-    .modal-content {
-      background: rgba(22, 30, 49, 0.9);
-      border: 1px solid var(--border-color);
-      border-radius: 20px;
-      width: 90%;
-      max-width: 480px;
-      padding: 32px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-      position: relative;
-      box-sizing: border-box;
-      animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    @keyframes modalFadeIn {
-      from { transform: scale(0.95); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    
-    /* Inputs in settings */
-    .form-group {
-      margin-bottom: 20px;
-      text-align: left;
-    }
-    .form-label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      margin-bottom: 8px;
-      margin-left: 4px;
-    }
-    .input-field {
-      width: 100%;
-      height: 40px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0 12px;
-      box-sizing: border-box;
-      color: var(--text-primary);
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-      transition: all 0.2s ease;
-    }
-    .input-field:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-      background: rgba(15, 23, 42, 0.6);
-    }
-    select option {
-      background-color: #0f172a;
-      color: #f8fafc;
-    }
-    
-    /* Option Card Styles for Proxy/Routing Settings */
-    .option-group {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-top: 6px;
-    }
-    
-    @media (max-width: 480px) {
-      .option-group {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    .option-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 12px 14px;
-      cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      user-select: none;
-      position: relative;
-      text-align: left;
-    }
-    
-    .option-card:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(99, 102, 241, 0.25);
-      transform: translateY(-1px);
-    }
-    
-    .option-card.active {
-      background: rgba(99, 102, 241, 0.08);
-      border-color: var(--primary);
-      box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
-    }
-    
-    .option-card-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 4px;
-    }
-    
-    .option-card-desc {
-      font-size: 11px;
-      color: var(--text-secondary);
-      line-height: 1.3;
-    }
-  
-    /* Light mode */
-    body.light {
-      --bg-dark: #f5f5f7;
-      --bg-surface: rgba(255, 255, 255, 0.72);
-      --bg-surface-hover: rgba(255, 255, 255, 0.88);
-      --border-color: rgba(0, 0, 0, 0.08);
-      --border-color-hover: rgba(0, 0, 0, 0.15);
-      --text-primary: #1d1d1f;
-      --text-secondary: #6e6e73;
-      --active-row-bg: rgba(48, 209, 88, 0.08);
-      background-image: 
-        radial-gradient(at 15% 10%, rgba(100, 210, 255, 0.12) 0px, transparent 45%),
-        radial-gradient(at 85% 20%, rgba(191, 90, 242, 0.10) 0px, transparent 40%),
-        radial-gradient(at 50% 80%, rgba(10, 132, 255, 0.06) 0px, transparent 50%);
-    }
-    body.light header { background: rgba(255,255,255,0.75); }
-    body.light .modal-content { background: rgba(255,255,255,0.92); }
+  }
 </style>
 </head>
 <body>
-<header>
+<div class="ambient" aria-hidden="true"><span class="aura a"></span><span class="aura b"></span><span class="aura c"></span></div>
+
+<header class="topbar">
   <div class="brand">
-    <h1>
-      <svg xmlns="http://www.w3.org/2000/svg" style="width:24px; height:24px; color:#818cf8;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-      AimiliVPN 节点管理系统
-    </h1>
+    <div class="brand-line">
+      <span class="mark-sm" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 5 6v5.4c0 4.2 2.8 7.6 7 9.4 4.2-1.8 7-5.2 7-9.4V6l-7-2.8z"></path><path d="M9.1 12.1l2.1 2.1 3.9-4.2"></path></svg>
+      </span>
+      <h1>AimiliVPN 节点管理系统</h1>
+      <button id="version_pill" class="version-pill" type="button" onclick="openVersionModal()" title="查看版本 / 检查更新" aria-label="查看版本并检查更新"><span class="version-dot" id="version_pill_dot" style="display: none;"></span><span id="version_pill_text">v—</span></button>
+    </div>
     <div id="status" class="status" style="display: none;"><span class="status-dot"></span>服务加载中...</div>
   </div>
-  <div class="btn-group">
+
+  <div class="actions">
+    <button id="refresh" class="btn btn-accent" type="button">更新节点</button>
 
     <div class="dropdown">
-      <button id="github_btn" class="btn-primary" style="background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-color); color: var(--text-primary);">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: middle; margin-right: 4px;"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-        GITHUB
-        <svg xmlns="http://www.w3.org/2000/svg" style="width:12px; height:12px; margin-left: 2px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
-      </button>
-      <div id="github_dropdown" class="dropdown-content">
-        <a href="https://github.com/junchengluo9-del/aimilivpn" target="_blank">正式版</a>
-        <a href="https://github.com/junchengluo9-del/aimilivpn" target="_blank">测试版</a>
-      </div>
-    </div>
-
-    <button id="refresh" class="btn-primary" style="background: var(--success-gradient);">
-      <svg xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.5" /></svg>
-      更新节点
-    <button id="theme_toggle" onclick="toggleTheme()" title="切换深色/浅色" style="background:rgba(255,255,255,0.08);">
-      <svg id="theme_icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-    </button>
-    </button>
-    <div class="dropdown">
-      <button id="admin_btn" class="btn-primary" style="background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-color); color: var(--text-primary);">
-        <svg xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+      <button id="admin_btn" class="btn" type="button" aria-haspopup="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 7.2a4.2 4.2 0 1 1-8.4 0 4.2 4.2 0 0 1 8.4 0z"></path><path d="M12 14.2c-3.6 0-6.4 2.4-6.4 5.3h12.8c0-2.9-2.8-5.3-6.4-5.3z"></path></svg>
         管理员
-        <svg xmlns="http://www.w3.org/2000/svg" style="width:12px; height:12px; margin-left: 2px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
       </button>
       <div id="admin_dropdown" class="dropdown-content">
         <a href="javascript:void(0)" onclick="openCredentialsModal()">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2.6"></rect><path d="M8.2 10.5V7.6a3.8 3.8 0 0 1 7.6 0v2.9"></path></svg>
           网页安全
         </a>
         <a href="javascript:void(0)" onclick="openNetworkModal()">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"></circle><path d="M12 3.6v2.4M12 18v2.4M3.6 12h2.4M18 12h2.4M6.1 6.1l1.7 1.7M16.2 16.2l1.7 1.7M17.9 6.1l-1.7 1.7M7.8 16.2l-1.7 1.7"></path></svg>
           代理设置
         </a>
         <a href="javascript:void(0)" onclick="openGatewayModal()">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="6" rx="2"></rect><rect x="3.5" y="13.5" width="17" height="6" rx="2"></rect><path d="M7.6 7.5h.01M7.6 16.5h.01"></path></svg>
           网关设置
         </a>
+        <a href="javascript:void(0)" onclick="openVersionModal()">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v8.6"></path><path d="M8.2 8.4l3.8 3.8 3.8-3.8"></path><path d="M4.6 15.2v2.6a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-2.6"></path></svg>
+          版本更新
+        </a>
         <a href="javascript:void(0)" onclick="openLogsModal()">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8h7l4.5 4.4v11.2a1.8 1.8 0 0 1-1.8 1.8H6.5a1.8 1.8 0 0 1-1.8-1.8V5.6a1.8 1.8 0 0 1 1.8-1.8z"></path><path d="M13.2 3.9v4.4h4.5M8.4 12.6h7M8.4 16h4.6"></path></svg>
           日志
         </a>
-        <a href="javascript:void(0)" onclick="logoutAdmin()" style="color: var(--danger); border-top: 1px solid rgba(255,255,255,0.05);">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+        <a href="javascript:void(0)" onclick="logoutAdmin()" class="danger-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15.4 16.4l4.1-4.4-4.1-4.4"></path><path d="M19.2 12H9.4"></path><path d="M12.2 4.6H6.9a2 2 0 0 0-2 2v10.8a2 2 0 0 0 2 2h5.3"></path></svg>
           退出
         </a>
       </div>
     </div>
-  </div>
-</header>
-<main>
-  
-    <!-- 当前连接活动节点卡片 -->
-    <section class="active-node-section" id="active_node_card" style="margin-bottom: 24px;">
-      <!-- Rendered dynamically by render() -->
-    </section>
 
-
-
-  <section class="toolbar">
-    <select id="status_filter">
-      <option value="all">全部节点</option>
-      <option value="available">可用节点</option>
-      <option value="unavailable">失效节点</option>
-    </select>
-    <select id="country_filter">
-      <option value="">所有国家</option>
-    </select>
-    <select id="ip_type_filter">
-      <option value="">所有IP类型</option>
-      <option value="residential">住宅IP</option>
-      <option value="hosting">机房IP</option>
-    </select>
-    <button id="btn_favorites" class="toolbar-btn" type="button" onclick="toggleFavoritesView()" style="margin-left: auto; height: 42px; gap: 6px;">
-      <svg xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.961 0 1.371 1.24.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.175 0l-3.97 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118l-3.97-2.883c-.783-.57-.372-1.81.588-1.81h4.906a1 1 0 00.951-.69l1.519-4.674z" />
-      </svg>
-      收藏菜单
-    </button>
-  </section>
-  <div id="favorites_panel" style="display: none; background: rgba(22, 30, 49, 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; margin-bottom: 20px; animation: modalFadeIn 0.25s ease-out;">
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <span style="font-size: 15px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-            ⭐ 收藏专属管理面板
-          </span>
-          <span style="font-size: 13px; color: var(--text-secondary);">
-            在这里管理您的收藏节点过滤，以及设置出站连接漂移策略。
-          </span>
-        </div>
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <button id="btn_toggle_fav_routing" type="button" class="toolbar-btn" style="height: 36px; padding: 0 14px; font-size: 13px; border-radius: 6px;" onclick="toggleFavRouting()">
-            启用仅用收藏出站
-          </button>
-        </div>
-      </div>
-      
-      <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
-        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-          <input type="checkbox" id="fav_fail_fallback_checkbox" style="margin-top: 3px; cursor: pointer;" onchange="handleFavFallbackChange(this.checked)" checked />
-          <div style="display: flex; flex-direction: column; gap: 2px;">
-            <span style="font-size: 14px; font-weight: 500; color: var(--text-primary);">收藏节点失效后自动切换其他（非收藏）可用节点</span>
-            <span style="font-size: 12px; color: var(--text-secondary);">勾选此项，当所有收藏节点不可用时，系统将自动使用其他最快的非收藏可用节点，保障网络连接不中断。</span>
-          </div>
-        </label>
-        <div id="fav_fallback_warning" style="display: none; margin-top: 12px; padding: 10px 14px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 8px; font-size: 12px; color: var(--danger); line-height: 1.4; animation: modalFadeIn 0.2s ease-out;">
-          ⚠️ <strong>警告</strong>：您已取消勾选此项。如果当前收藏的节点均不可用，系统将<strong>无法切换</strong>到其他可用节点，可能导致网络<strong>彻底断开连接</strong>！
-        </div>
+    <div class="dropdown">
+      <button id="github_btn" class="btn" type="button" aria-haspopup="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GITHUB
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+      <div id="github_dropdown" class="dropdown-content">
+        <a href="https://github.com/junchengluo9-del/aimilivpn" target="_blank" rel="noopener">正式版</a>
+        <a href="https://github.com/junchengluo9-del/aimilivpn" target="_blank" rel="noopener">测试版</a>
       </div>
     </div>
   </div>
 
-  <div class="table-wrapper">
+  <button id="theme_toggle" class="btn icon-btn" type="button" onclick="toggleTheme()" title="切换深色/浅色" aria-label="切换深色/浅色">
+    <svg id="theme_icon" class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.2"></circle>
+      <path d="M12 2.4v2.2M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.55 1.55M17.25 17.25l1.55 1.55M18.8 5.2l-1.55 1.55M6.75 17.25L5.2 18.8"></path>
+    </svg>
+    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M20.4 14.3A8.6 8.6 0 0 1 9.7 3.6a8.6 8.6 0 1 0 10.7 10.7z"></path>
+    </svg>
+  </button>
+</header>
+
+<main>
+  <!-- 当前连接活动节点卡片 -->
+  <section class="active-node-section" id="active_node_card" aria-live="polite">
+    <!-- Rendered dynamically by render() -->
+  </section>
+
+  <section class="toolbar pane" aria-label="节点筛选与收藏">
+    <div class="select-wrap">
+      <select id="status_filter" aria-label="按状态筛选">
+        <option value="all">全部节点</option>
+        <option value="available">可用节点</option>
+        <option value="unavailable">失效节点</option>
+      </select>
+      <svg class="select-caret" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </div>
+    <div class="select-wrap">
+      <select id="country_filter" aria-label="按国家筛选">
+        <option value="">所有国家</option>
+      </select>
+      <svg class="select-caret" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </div>
+    <div class="select-wrap">
+      <select id="ip_type_filter" aria-label="按 IP 类型筛选">
+        <option value="">所有IP类型</option>
+        <option value="residential">住宅IP</option>
+        <option value="hosting">机房IP</option>
+      </select>
+      <svg class="select-caret" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </div>
+    <button id="btn_favorites" class="btn toolbar-btn push-end" type="button" onclick="toggleFavoritesView()">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.9l2.6 5.2 5.8.85-4.2 4.1 1 5.75L12 17l-5.2 2.8 1-5.75-4.2-4.1 5.8-.85L12 3.9z"></path></svg>
+      收藏菜单
+    </button>
+  </section>
+
+  <div id="favorites_panel" class="pane" style="display: none;">
+    <div class="fav-head">
+      <div>
+        <div class="fav-title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.9l2.6 5.2 5.8.85-4.2 4.1 1 5.75L12 17l-5.2 2.8 1-5.75-4.2-4.1 5.8-.85L12 3.9z"></path></svg>
+          收藏专属管理面板
+        </div>
+        <div class="fav-desc">在这里管理您的收藏节点过滤，以及设置出站连接漂移策略。</div>
+      </div>
+      <button id="btn_toggle_fav_routing" type="button" class="btn" onclick="toggleFavRouting()">启用仅用收藏出站</button>
+    </div>
+
+    <div class="fav-body">
+      <label class="check-row">
+        <input type="checkbox" id="fav_fail_fallback_checkbox" onchange="handleFavFallbackChange(this.checked)" checked />
+        <span class="check-text">
+          <span class="check-title">收藏节点失效后自动切换其他（非收藏）可用节点</span>
+          <span class="check-hint">勾选此项，当所有收藏节点不可用时，系统将自动使用其他最快的非收藏可用节点，保障网络连接不中断。</span>
+        </span>
+      </label>
+      <div id="fav_fallback_warning" style="display: none;">
+        <strong>警告</strong>：您已取消勾选此项。如果当前收藏的节点均不可用，系统将<strong>无法切换</strong>到其他可用节点，可能导致网络<strong>彻底断开连接</strong>！
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrapper pane">
     <div class="table-container">
       <table>
         <thead>
           <tr>
-            <th style="width: 90px;">状态</th>
-            <th style="width: 220px;">IP 地址 : 端口</th>
+            <th style="width: 96px;">状态</th>
+            <th style="width: 210px;">IP 地址 : 端口</th>
             <th>物理位置</th>
             <th>运营主体 / ISP</th>
-            <th style="width: 110px;">IP 类型</th>
-            <th style="width: 180px;">操作</th>
+            <th style="width: 108px;">IP 类型</th>
+            <th style="width: 178px;">操作</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
-    
+
     <!-- 分页控制栏 -->
-    <div class="pagination-container" style="padding: 16px; display: none; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px;">
-      <div style="font-size: 13px; color: var(--text-secondary);">
-        显示第 <span id="page_start" style="color: var(--text-primary); font-weight:600;">0</span> - <span id="page_end" style="color: var(--text-primary); font-weight:600;">0</span> 条，共 <span id="filtered_count" style="color: var(--text-primary); font-weight:600;">0</span> 条备选节点
+    <div class="pagination-container">
+      <div>
+        显示第 <span id="page_start" style="color: var(--ink); font-weight: 600;">0</span> - <span id="page_end" style="color: var(--ink); font-weight: 600;">0</span> 条，共 <span id="filtered_count" style="color: var(--ink); font-weight: 600;">0</span> 条备选节点
       </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <button id="btn_first_page" class="connect-btn" style="height: 32px; padding: 0 10px;">首页</button>
-        <button id="btn_prev_page" class="connect-btn" style="height: 32px; padding: 0 10px;">上一页</button>
-        <span style="font-size: 13px; color: var(--text-secondary); margin: 0 8px;">
-          页码 <strong id="current_page_val" style="color: var(--primary);">1</strong> / <strong id="total_pages_val">1</strong>
+      <div class="pager">
+        <button id="btn_first_page" class="btn btn-sm">首页</button>
+        <button id="btn_prev_page" class="btn btn-sm">上一页</button>
+        <span>
+          页码 <strong id="current_page_val" style="color: var(--accent);">1</strong> / <strong id="total_pages_val">1</strong>
         </span>
-        <button id="btn_next_page" class="connect-btn" style="height: 32px; padding: 0 10px;">下一页</button>
-        <button id="btn_last_page" class="connect-btn" style="height: 32px; padding: 0 10px;">尾页</button>
+        <button id="btn_next_page" class="btn btn-sm">下一页</button>
+        <button id="btn_last_page" class="btn btn-sm">尾页</button>
       </div>
     </div>
   </div>
 
   <!-- Credentials Modal (网页安全设置) -->
   <div id="credentials_modal" class="modal">
-    <div class="modal-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:20px; height:20px; color: var(--primary);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="credentials_title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="credentials_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2.6"></rect><path d="M8.2 10.5V7.6a3.8 3.8 0 0 1 7.6 0v2.9"></path></svg>
           网页安全
-        </h3>
-        <button type="button" onclick="closeCredentialsModal()" style="background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </h2>
+        <button type="button" class="modal-close" onclick="closeCredentialsModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
         </button>
       </div>
-      
-      <div id="credentials_error" style="color: var(--danger); font-size: 13px; margin-bottom: 16px; padding: 8px 12px; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.2); border-radius: 6px; display: none;"></div>
-      <div id="credentials_success" style="color: var(--success); font-size: 13px; margin-bottom: 16px; padding: 8px 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); border-radius: 6px; display: none;"></div>
+
+      <div id="credentials_error" class="form-alert error" style="display: none;"></div>
+      <div id="credentials_success" class="form-alert success" style="display: none;"></div>
 
       <form id="credentials_form" onsubmit="saveCredentials(event)">
-        <div class="form-group" style="margin-bottom: 12px;">
+        <div class="form-group">
           <label class="form-label" for="cred_username">管理账号</label>
-          <input type="text" id="cred_username" class="input-field" required placeholder="请输入管理账号">
-        </div>
-        
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label class="form-label" for="cred_password">安全密码</label>
-          <input type="password" id="cred_password" class="input-field" placeholder="留空则保留当前密码">
+          <input type="text" id="cred_username" class="input-field" required placeholder="请输入管理账号" autocomplete="off">
         </div>
 
-        <div class="form-group" style="margin-bottom: 12px;">
+        <div class="form-group">
+          <label class="form-label" for="cred_password">安全密码</label>
+          <input type="password" id="cred_password" class="input-field" placeholder="留空则保留当前密码" autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
           <label class="form-label" for="cred_port">网页管理端口</label>
           <input type="number" id="cred_port" class="input-field" required min="1" max="65535" placeholder="8787">
         </div>
-        
-        <div class="form-group" style="margin-bottom: 20px;">
+
+        <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label" for="cred_suffix">登录安全后缀 (仅字母和数字)</label>
-          <input type="text" id="cred_suffix" class="input-field" required pattern="[A-Za-z0-9]+" placeholder="EJsW2EeBo9lY">
+          <input type="text" id="cred_suffix" class="input-field" required pattern="[A-Za-z0-9]+" placeholder="EJsW2EeBo9lY" spellcheck="false" autocapitalize="off">
         </div>
-        
-        <div style="display: flex; gap: 12px; justify-content: flex-end;">
-          <button type="button" onclick="closeCredentialsModal()" style="height: 40px; padding: 0 16px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">取消</button>
-          <button type="submit" id="credentials_submit_btn" class="btn-primary" style="height: 40px; padding: 0 20px; font-weight: 600; border-radius: 8px;">保存修改</button>
+
+        <div class="modal-actions">
+          <button type="button" class="btn" onclick="closeCredentialsModal()">取消</button>
+          <button type="submit" id="credentials_submit_btn" class="btn btn-accent">保存修改</button>
         </div>
       </form>
     </div>
@@ -3173,238 +3868,277 @@ INDEX_HTML = r"""<!doctype html>
 
   <!-- Network Modal (代理及网络设置，包括出站路由) -->
   <div id="network_modal" class="modal">
-    <div class="modal-content" style="max-width: 480px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:20px; height:20px; color: var(--primary);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="network_title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="network_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.1"></circle><path d="M12 3.6v2.4M12 18v2.4M3.6 12h2.4M18 12h2.4M6.1 6.1l1.7 1.7M16.2 16.2l1.7 1.7M17.9 6.1l-1.7 1.7M7.8 16.2l-1.7 1.7"></path></svg>
           代理设置
-        </h3>
-        <button type="button" onclick="closeNetworkModal()" style="background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </h2>
+        <button type="button" class="modal-close" onclick="closeNetworkModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
         </button>
       </div>
-      
-      <div id="network_error" style="color: var(--danger); font-size: 13px; margin-bottom: 16px; padding: 8px 12px; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.2); border-radius: 6px; display: none;"></div>
-      <div id="network_success" style="color: var(--success); font-size: 13px; margin-bottom: 16px; padding: 8px 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); border-radius: 6px; display: none;"></div>
+
+      <div id="network_error" class="form-alert error" style="display: none;"></div>
+      <div id="network_success" class="form-alert success" style="display: none;"></div>
 
       <form id="network_form" onsubmit="saveNetwork(event)">
-        <div class="form-group" style="margin-bottom: 16px;">
+        <div class="form-group">
           <label class="form-label" for="net_proxy_port">HTTP/SOCKS5 代理出站端口</label>
           <input type="number" id="net_proxy_port" class="input-field" required min="1024" max="65535" placeholder="7928">
         </div>
 
-        <div style="border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 16px; margin-bottom: 16px;">
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label class="form-label">IP 出站路由模式</label>
-            <input type="hidden" id="net_routing_mode" value="auto">
-            <div class="option-group" id="routing_mode_group">
-              <div class="option-card active" data-value="auto" onclick="setRoutingMode('auto')">
-                <div class="option-card-title">自动配置</div>
-                <div class="option-card-desc">智能切换，最稳定</div>
-              </div>
-              <div class="option-card" data-value="fixed_ip" onclick="setRoutingMode('fixed_ip')">
-                <div class="option-card-title">固定 IP</div>
-                <div class="option-card-desc">锁定IP，不自动切换</div>
-              </div>
-              <div class="option-card" data-value="fixed_region" onclick="setRoutingMode('fixed_region')">
-                <div class="option-card-title">固定地区</div>
-                <div class="option-card-desc">锁定特定国家地区</div>
-              </div>
+        <hr class="divider">
+
+        <div class="form-group">
+          <label class="form-label">IP 出站路由模式</label>
+          <input type="hidden" id="net_routing_mode" value="auto">
+          <div class="option-group" id="routing_mode_group">
+            <div class="option-card active" data-value="auto" onclick="setRoutingMode('auto')">
+              <div class="option-card-title">自动配置</div>
+              <div class="option-card-desc">智能切换，最稳定</div>
             </div>
-          </div>
-          
-          <div id="net_force_country_group" class="form-group" style="margin-bottom: 16px; display: none;">
-            <label class="form-label" for="net_force_country">锁定国家地区</label>
-            <select id="net_force_country" class="input-field" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); color: var(--text-primary); outline: none; cursor: pointer; width: 100%; height: 40px; border-radius: 8px; padding: 0 12px;">
-              <option value="">正在加载节点国家...</option>
-            </select>
-          </div>
-          
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label class="form-label">IP 出站类型过滤</label>
-            <input type="hidden" id="net_routing_ip_type" value="all">
-            <div class="option-group" id="routing_ip_type_group">
-              <div class="option-card active" data-value="all" onclick="setRoutingIpType('all')">
-                <div class="option-card-title">所有IP</div>
-                <div class="option-card-desc">机房 + 住宅</div>
-              </div>
-              <div class="option-card" data-value="residential" onclick="setRoutingIpType('residential')">
-                <div class="option-card-title">住宅IP</div>
-                <div class="option-card-desc">静态家宽</div>
-              </div>
-              <div class="option-card" data-value="hosting" onclick="setRoutingIpType('hosting')">
-                <div class="option-card-title">机房IP</div>
-                <div class="option-card-desc">普通机房</div>
-              </div>
+            <div class="option-card" data-value="fixed_ip" onclick="setRoutingMode('fixed_ip')">
+              <div class="option-card-title">固定 IP</div>
+              <div class="option-card-desc">锁定IP，不自动切换</div>
             </div>
-          </div>
-          
-          <div id="net_routing_warning" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; padding: 8px 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 6px; margin-top: 8px;">
-            ℹ️ <strong>自动配置</strong>：全自动测试并选择最佳IP。在使用过程中，如果当前连接节点没有失效，将不再更换IP；如果当前节点失效，系统将立刻秒级自动漂移到其他最快的可用节点。
+            <div class="option-card" data-value="fixed_region" onclick="setRoutingMode('fixed_region')">
+              <div class="option-card-title">固定地区</div>
+              <div class="option-card-desc">锁定特定国家地区</div>
+            </div>
           </div>
         </div>
-        
-        <div style="display: flex; gap: 12px; justify-content: flex-end;">
-          <button type="button" onclick="closeNetworkModal()" style="height: 40px; padding: 0 16px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">取消</button>
-          <button type="submit" id="network_submit_btn" class="btn-primary" style="height: 40px; padding: 0 20px; font-weight: 600; border-radius: 8px;">保存修改</button>
+
+        <div id="net_force_country_group" class="form-group" style="display: none;">
+          <label class="form-label" for="net_force_country">锁定国家地区</label>
+          <select id="net_force_country" class="input-field">
+            <option value="">正在加载节点国家...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">IP 出站类型过滤</label>
+          <input type="hidden" id="net_routing_ip_type" value="all">
+          <div class="option-group" id="routing_ip_type_group">
+            <div class="option-card active" data-value="all" onclick="setRoutingIpType('all')">
+              <div class="option-card-title">所有IP</div>
+              <div class="option-card-desc">机房 + 住宅</div>
+            </div>
+            <div class="option-card" data-value="residential" onclick="setRoutingIpType('residential')">
+              <div class="option-card-title">住宅IP</div>
+              <div class="option-card-desc">静态家宽</div>
+            </div>
+            <div class="option-card" data-value="hosting" onclick="setRoutingIpType('hosting')">
+              <div class="option-card-title">机房IP</div>
+              <div class="option-card-desc">普通机房</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="net_routing_warning" class="note">
+          <strong>自动配置</strong>：全自动测试并选择最佳IP。在使用过程中，如果当前连接节点没有失效，将不再更换IP；如果当前节点失效，系统将立刻秒级自动漂移到其他最快的可用节点。
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn" onclick="closeNetworkModal()">取消</button>
+          <button type="submit" id="network_submit_btn" class="btn btn-accent">保存修改</button>
         </div>
       </form>
     </div>
   </div>
 
-
   <!-- VPS 购买推荐 Modal -->
   <div id="vps_recommend_modal" class="modal">
-    <div class="modal-content" style="max-width: 640px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:20px; height:20px; color: var(--warning);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364.364l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+    <div class="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="vps_title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="vps_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color: var(--warn-ink);" aria-hidden="true"><path d="M9.6 17.2h4.8M12 3.4v1.9M18.6 5.9l-1.3 1.3M20.9 12.6h-1.9M3.1 12.6h1.9M5.4 5.9l1.3 1.3"></path><path d="M8.4 13.4a3.8 3.8 0 1 1 7.2 0c0 1.3-.9 2.1-1.4 3h-4.4c-.5-.9-1.4-1.7-1.4-3z"></path></svg>
           VPS 购买推荐
-        </h3>
-        <button type="button" onclick="closeVpsModal()" style="background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </h2>
+        <button type="button" class="modal-close" onclick="closeVpsModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
         </button>
       </div>
-      
+
       <div class="vps-links">
         <div class="vps-item">
           <span class="vps-tag tag-normal">RNVPS (RackNerd) 推荐</span>
           <span class="vps-desc">超低折扣价格，性价比极高，日常使用实惠方便，海外多机房可选，非常适合普通大众用户。</span>
-          <a href="https://my.racknerd.com/aff.php?aff=18708" target="_blank" class="vps-btn">点击进入官网</a>
+          <a href="https://my.racknerd.com/aff.php?aff=18708" target="_blank" rel="noopener" class="vps-btn">点击进入官网</a>
         </div>
         <div class="vps-item">
           <span class="vps-tag tag-premium">搬瓦工 (Bandwagon) 推荐</span>
           <span class="vps-desc">直连三网顶级专线，经典高带宽 CN2 GIA/9929 优化线路，极致速度且超凡稳定，高端用户首选。</span>
-          <a href="https://bandwagonhost.com/aff.php?aff=81790" target="_blank" class="vps-btn">点击进入官网</a>
+          <a href="https://bandwagonhost.com/aff.php?aff=81790" target="_blank" rel="noopener" class="vps-btn">点击进入官网</a>
         </div>
-      </div>
-      
-      <div class="vps-footer" style="margin-top: 20px;">
-        官方技术支持及优质资源交流论坛：<a href="https://339936.xyz" target="_blank" class="forum-link">339936.xyz</a>
       </div>
 
-      <div class="vps-footer" style="margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; text-align: left; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-        <div style="font-weight: bold; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:16px; height:16px; color: var(--primary);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          🎁 捐赠支持项目开发：
+      <div class="vps-footer" style="text-align: center;">
+        官方技术支持及优质资源交流论坛：<a href="https://339936.xyz" target="_blank" rel="noopener" class="forum-link">339936.xyz</a>
+      </div>
+
+      <div class="vps-footer left">
+        <div class="donate-label">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.6c2.6-3.1 8-1.4 8 4 0 4.2-5.4 6.8-8 9.4-2.6-2.6-8-5.2-8-9.4 0-5.4 5.4-7.1 8-4z"></path></svg>
+          捐赠支持项目开发
         </div>
-        <div style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 6px; margin-top: 6px; word-break: break-all; select-all: true;">
-          <span style="color: var(--primary); font-weight: bold;">BNB (BSC):</span> 0xB6d78c42CEB0687A31B8cfEBE4b51b6eB8953C17<br>
-          <span style="color: var(--primary); font-weight: bold;">TRX (TRC20):</span> TSdzCW6JvsrqcppodYjhSrku4mYmDJ9pxf
+        <div class="donate-box">
+          <b>BNB (BSC):</b> 0xB6d78c42CEB0687A31B8cfEBE4b51b6eB8953C17<br>
+          <b>TRX (TRC20):</b> TSdzCW6JvsrqcppodYjhSrku4mYmDJ9pxf
         </div>
       </div>
     </div>
   </div>
 
-
-
   <!-- Gateway Modal (网关自检与代理测试) -->
   <div id="gateway_modal" class="modal">
-    <div class="modal-content" style="max-width: 600px; width: 90%;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:20px; height:20px; color: var(--primary);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+    <div class="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="gateway_title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="gateway_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="6" rx="2"></rect><rect x="3.5" y="13.5" width="17" height="6" rx="2"></rect><path d="M7.6 7.5h.01M7.6 16.5h.01"></path></svg>
           网关设置与自检
-        </h3>
-        <button type="button" onclick="closeGatewayModal()" style="background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </h2>
+        <button type="button" class="modal-close" onclick="closeGatewayModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
         </button>
       </div>
 
       <!-- 服务列表 -->
-      <div id="gateway_services_list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
-        <div style="text-align: center; color: var(--text-secondary); padding: 20px 0;">
-          <svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; display: inline-block; margin-bottom: 8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.2" fill="none"></circle><path d="M4 12a8 8 0 018-8" stroke="currentColor" fill="none"></path></svg>
+      <div id="gateway_services_list">
+        <div style="text-align: center; color: var(--ink-2); padding: 20px 0;">
+          <svg style="animation: spin 1s linear infinite; width: 20px; height: 20px; display: inline-block; margin-bottom: 8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.2" fill="none"></circle><path d="M4 12a8 8 0 018-8" stroke="currentColor" fill="none"></path></svg>
           <div>正在加载系统网关状态...</div>
         </div>
       </div>
 
-      <!-- 分割线 -->
-      <div style="border-top: 1px dashed rgba(255, 255, 255, 0.08); margin: 20px 0;"></div>
-
       <!-- 本地代理出口检测 -->
-      <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-          <div class="stat-icon-wrapper" style="background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.2); width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stat-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color: var(--primary); width: 18px; height: 18px;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071a10.5 10.5 0 0114.14 0M1.414 8.05a16 16 0 0121.172 0" /></svg>
+      <div class="proxy-box">
+        <div class="proxy-box-head">
+          <div class="stat-icon-wrapper" style="width: 34px; height: 34px; border-radius: 10px;">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stat-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="width: 17px; height: 17px; color: var(--accent);" aria-hidden="true"><path d="M8.1 16.4a5.5 5.5 0 0 1 7.8 0"></path><path d="M12 20h.01"></path><path d="M4.9 12.9a10.5 10.5 0 0 1 14.2 0"></path><path d="M1.4 8.1a16 16 0 0 1 21.2 0"></path></svg>
           </div>
           <div>
-            <h4 style="margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">本地代理出口检测</h4>
-            <p style="margin: 2px 0 0 0; font-size: 12px; color: var(--text-secondary);">检测 HTTP/SOCKS5 代理出站连通性与 IP</p>
+            <h3>本地代理出口检测</h3>
+            <p>检测 HTTP/SOCKS5 代理出站连通性与 IP</p>
           </div>
         </div>
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-          <div style="font-size: 13px; color: var(--text-secondary);">
-            测试状态: <span id="proxy_status_badge" class="badge not_checked" style="margin-left: 4px;">未检测</span>
-          </div>
-          <div style="font-size: 13px; color: var(--text-secondary); text-align: right;">
-            出口 IP: <span id="proxy_ip_val" class="mono" style="font-weight: 600; color: var(--text-primary);">-</span> 
+
+        <div class="proxy-readout">
+          <div>测试状态：<span id="proxy_status_badge" class="badge not_checked">未检测</span></div>
+          <div>
+            出口 IP：<span id="proxy_ip_val" class="mono" style="font-weight: 600; color: var(--ink);">-</span>
             <span id="proxy_latency_val" style="margin-left: 6px;"></span>
           </div>
         </div>
 
-        <div style="display: flex; gap: 12px; justify-content: flex-end;">
-          <button id="btn_test_proxy" class="btn-primary" style="height: 36px; padding: 0 16px; font-size: 13px;">
-            <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="btn_test_proxy" class="btn btn-accent" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.2 12a8.2 8.2 0 1 1-2.4-5.8"></path><path d="M9.4 12.2l1.9 1.9 4-4.3"></path></svg>
             开始检测
           </button>
         </div>
       </div>
-      
-      <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
-        <button type="button" onclick="closeGatewayModal()" style="height: 38px; padding: 0 20px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">关闭</button>
+
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeGatewayModal()">关闭</button>
       </div>
     </div>
   </div>
 
   <!-- Logs Modal (日志监控与分类筛选) -->
   <div id="logs_modal" class="modal">
-    <div class="modal-content" style="max-width: 800px; width: 95%;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-        <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:20px; height:20px; color: var(--primary);" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+    <div class="modal-content modal-xl" role="dialog" aria-modal="true" aria-labelledby="logs_title">
+      <div class="logs-head">
+        <h2 class="modal-title" id="logs_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.8h7l4.5 4.4v11.2a1.8 1.8 0 0 1-1.8 1.8H6.5a1.8 1.8 0 0 1-1.8-1.8V5.6a1.8 1.8 0 0 1 1.8-1.8z"></path><path d="M13.2 3.9v4.4h4.5M8.4 12.6h7M8.4 16h4.6"></path></svg>
           今日运行日志
-        </h3>
-        
-        <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
-          <label class="form-label" for="log_filter_select" style="margin: 0; font-size: 13px; color: var(--text-secondary);">日志筛选:</label>
-          <select id="log_filter_select" class="input-field" style="width: 140px; height: 32px; font-size: 12px; border-radius: 6px; padding: 0 8px; background: rgba(255, 255, 255, 0.03);" onchange="filterAndRenderLogs()">
-            <option value="all">全部日志</option>
-            <option value="proxy">代理相关 (Proxy)</option>
-            <option value="vpn">VPN 连接 (VPN)</option>
-            <option value="system">系统运行 (Main/Route)</option>
-          </select>
-        </div>
-        
-        <button type="button" onclick="closeLogsModal()" style="background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--text-secondary); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-          <svg xmlns="http://www.w3.org/2000/svg" style="width:18px; height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </h2>
+
+        <label class="form-label" for="log_filter_select">日志筛选</label>
+        <select id="log_filter_select" class="input-field" onchange="filterAndRenderLogs()">
+          <option value="all">全部日志</option>
+          <option value="proxy">代理相关 (Proxy)</option>
+          <option value="vpn">VPN 连接 (VPN)</option>
+          <option value="system">系统运行 (Main/Route)</option>
+        </select>
+
+        <button type="button" class="modal-close" onclick="closeLogsModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
         </button>
       </div>
 
       <!-- Terminal Log Container -->
-      <div id="log_terminal_container" style="background: #050811; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; height: 400px; padding: 16px; overflow-y: auto; font-family: 'JetBrains Mono', Consolas, Courier, monospace; font-size: 12px; line-height: 1.5; text-align: left; white-space: pre-wrap; word-break: break-all; color: #a5b4fc; box-shadow: inset 0 4px 20px rgba(0,0,0,0.8); position: relative; margin-bottom: 20px;">
-        <div style="color: var(--text-secondary); text-align: center; margin-top: 150px;">
-          暂无今日运行日志记录。
-        </div>
+      <div id="log_terminal_container" class="log-terminal">
+        <div class="log-empty">暂无今日运行日志记录。</div>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; gap: 8px;">
-          <button type="button" onclick="copyLogContent()" class="btn-primary" style="height: 38px; padding: 0 16px; background: rgba(255,255,255,0.05); color: var(--text-primary); border: 1px solid var(--border-color);">
-            <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px; margin-right: 4px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+      <div class="logs-foot">
+        <div class="group">
+          <button type="button" onclick="copyLogContent()" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2.2"></rect><path d="M15.5 8.5V5.7a1.7 1.7 0 0 0-1.7-1.7H5.7A1.7 1.7 0 0 0 4 5.7v8.1a1.7 1.7 0 0 0 1.7 1.7h2.8"></path></svg>
             一键复制
           </button>
-          <button type="button" onclick="exportLogContent()" class="btn-primary" style="height: 38px; padding: 0 16px; background: rgba(255,255,255,0.05); color: var(--text-primary); border: 1px solid var(--border-color);">
-            <svg xmlns="http://www.w3.org/2000/svg" style="width:14px; height:14px; margin-right: 4px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+          <button type="button" onclick="exportLogContent()" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6v10.2"></path><path d="M8 10.4l4 4 4-4"></path><path d="M4.6 16.2v2.1a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-2.1"></path></svg>
             导出日志
           </button>
         </div>
-        <button type="button" onclick="closeLogsModal()" style="height: 38px; padding: 0 20px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer;">关闭</button>
+        <button type="button" class="btn" onclick="closeLogsModal()">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Version Modal (版本检查与网页端在线更新) -->
+  <div id="version_modal" class="modal">
+    <div class="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="version_title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="version_title">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6v8.6"></path><path d="M8.2 8.4l3.8 3.8 3.8-3.8"></path><path d="M4.6 15.2v2.6a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-2.6"></path></svg>
+          版本检查与更新
+        </h2>
+        <button type="button" class="modal-close" onclick="closeVersionModal()" aria-label="关闭">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+
+      <div class="version-grid">
+        <div class="version-card is-current">
+          <div class="version-card-head">
+            <span class="version-card-label">当前版本</span>
+            <span class="badge" id="version_current_branch">—</span>
+          </div>
+          <div class="version-commit" id="version_current_commit">—</div>
+          <div class="version-subject" id="version_current_subject">正在读取本地版本信息...</div>
+          <div class="version-meta" id="version_current_meta">—</div>
+        </div>
+        <div class="version-card">
+          <div class="version-card-head">
+            <span class="version-card-label">远端最新</span>
+            <span class="badge not_checked" id="version_remote_badge">未检查</span>
+          </div>
+          <div class="version-commit" id="version_remote_commit">—</div>
+          <div class="version-subject" id="version_remote_subject">点击「检查更新」获取远端最新版本</div>
+          <div class="version-meta" id="version_remote_meta">—</div>
+        </div>
+      </div>
+
+      <div class="version-status" id="version_status">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.6"></circle><path d="M12 8.2h.01M12 11.4v4.4"></path></svg>
+        <span id="version_status_text">正在加载版本信息...</span>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="closeVersionModal()">关闭</button>
+        <button type="button" id="version_check_btn" class="btn" onclick="checkAppVersion()">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11.5A8 8 0 1 1 12 4"></path><path d="M20 4.5v6h-6"></path></svg>
+          检查更新
+        </button>
+        <button type="button" id="version_update_btn" class="btn btn-accent" data-force="0" onclick="onVersionPrimaryAction()" disabled>立即更新</button>
       </div>
     </div>
   </div>
 </main>
+
 <script>
 let nodes=[], state={}, testingNodeIds = new Set();
 let currentPage = 1;
@@ -3586,11 +4320,11 @@ function render(){
       <div class="active-card" style="background: var(--bg-surface); border-color: var(--warning); box-shadow: 0 0 15px rgba(245, 158, 11, 0.15);">
         <div class="active-card-info">
           <div class="stat-icon-wrapper" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); width: 48px; height: 48px; border-radius: 12px;">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stat-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="color: #f59e0b; width: 24px; height: 24px; animation: spin 2s linear infinite;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" class="stat-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="color: var(--warning); width: 24px; height: 24px; animation: spin 2s linear infinite;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18" /></svg>
           </div>
           <div class="active-card-details">
             <div class="active-card-title" style="color: var(--text-primary);">
-              <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);"><span class="badge-pulse" style="background: #f59e0b;"></span>正在连接</span>
+              <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--warning); border-color: rgba(245, 158, 11, 0.3);"><span class="badge-pulse" style="background: var(--warning);"></span>正在连接</span>
               <strong>${esc(state.active_node_latency || '正在连接...')}</strong>
             </div>
             <div class="active-card-meta" style="margin-top: 4px;">
@@ -3608,7 +4342,7 @@ function render(){
       <div class="active-card">
         <div class="active-card-info">
           <div class="stat-icon-wrapper" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); width: 48px; height: 48px; border-radius: 12px;">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stat-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="color: #34d399; width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" class="stat-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="color: var(--success); width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
           </div>
           <div class="active-card-details">
             <div class="active-card-title">
@@ -3672,9 +4406,9 @@ function render(){
   if (state.is_connecting) {
     pBadge.className = "badge";
     pBadge.style.background = "rgba(245, 158, 11, 0.15)";
-    pBadge.style.color = "#f59e0b";
+    pBadge.style.color = "var(--warning)";
     pBadge.style.borderColor = "rgba(245, 158, 11, 0.3)";
-    pBadge.innerHTML = `<span class="badge-pulse" style="background: #f59e0b;"></span>正在连接`;
+    pBadge.innerHTML = `<span class="badge-pulse" style="background: var(--warning);"></span>正在连接`;
     pIpVal.textContent = state.active_node_latency || "正在连接...";
     pLatVal.innerHTML = `<span style="color: var(--text-secondary); font-size: 12px;">${esc(state.last_check_message || "正在与 VPN 节点建立加密隧道，请稍候...")}</span>`;
     pBtn.disabled = true;
@@ -3725,7 +4459,7 @@ function render(){
 
   // Render table rows
   if (currentPageNodes.length === 0) {
-    $("rows").innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 40px 0;">未找到符合过滤条件的备选节点。</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 48px 0;">未找到符合过滤条件的备选节点。</td></tr>`;
   } else {
     $("rows").innerHTML=currentPageNodes.map(n=>{
       if (!n) return '';
@@ -4069,10 +4803,10 @@ function updateFavPanelUI() {
         favRoutingBtn.style.background = "var(--danger-gradient)";
         favRoutingBtn.style.borderColor = "transparent";
         favRoutingBtn.style.color = "#ffffff";
-        favRoutingBtn.style.boxShadow = "0 0 12px rgba(244, 63, 94, 0.3)";
+        favRoutingBtn.style.boxShadow = "none";
       } else {
         favRoutingBtn.textContent = "启用仅用收藏出站";
-        favRoutingBtn.style.background = "rgba(255,255,255,0.03)";
+        favRoutingBtn.style.background = "var(--btn-tint)";
         favRoutingBtn.style.borderColor = "var(--border-color)";
         favRoutingBtn.style.color = "var(--text-primary)";
         favRoutingBtn.style.boxShadow = "none";
@@ -4193,25 +4927,25 @@ function handleRoutingModeChange(mode) {
     warningDiv.style.color = "var(--warning)";
     warningDiv.style.background = "rgba(245, 158, 11, 0.1)";
     warningDiv.style.border = "1px solid rgba(245, 158, 11, 0.2)";
-    warningDiv.innerHTML = `⚠️ <strong>固定地区</strong>：限制仅连接选定国家的节点，且后台仅并发测速该国家的节点。如果该国的所有可用节点都失效，会造成代理中断且<strong>绝不自动切换到其他国家</strong>的节点。`;
+    warningDiv.innerHTML = `<strong>固定地区</strong>：限制仅连接选定国家的节点，且后台仅并发测速该国家的节点。如果该国的所有可用节点都失效，会造成代理中断且<strong>绝不自动切换到其他国家</strong>的节点。`;
   } else if (mode === "favorites") {
     countryGroup.style.display = "none";
     warningDiv.style.color = "var(--warning)";
     warningDiv.style.background = "rgba(245, 158, 11, 0.1)";
     warningDiv.style.border = "1px solid rgba(245, 158, 11, 0.2)";
-    warningDiv.innerHTML = `⚠️ <strong>仅用收藏</strong>：只连接和切换您收藏的节点。如果所有收藏的节点均失效，系统不会自动切换到未收藏的节点。请确保收藏列表中有足够多且可用的节点。`;
+    warningDiv.innerHTML = `<strong>仅用收藏</strong>：只连接和切换您收藏的节点。如果所有收藏的节点均失效，系统不会自动切换到未收藏的节点。请确保收藏列表中有足够多且可用的节点。`;
   } else if (mode === "fixed_ip") {
     countryGroup.style.display = "none";
     warningDiv.style.color = "var(--warning)";
     warningDiv.style.background = "rgba(245, 158, 11, 0.1)";
     warningDiv.style.border = "1px solid rgba(245, 158, 11, 0.2)";
-    warningDiv.innerHTML = `⚠️ <strong>固定IP</strong>：锁定当前连接的节点。不管该节点是否失效，系统都绝不自动切换至其他IP；如果节点由于网络故障失效，会造成代理中断（但如果OpenVPN连接意外退出，脚本将尝试为您在后台重新拉起连接同一IP）。<br><strong>提示</strong>：您可以在主页 of 节点列表中直接点击“连接”按钮来选择并锁定不同的IP节点。`;
+    warningDiv.innerHTML = `<strong>固定IP</strong>：锁定当前连接的节点。不管该节点是否失效，系统都绝不自动切换至其他IP；如果节点由于网络故障失效，会造成代理中断（但如果OpenVPN连接意外退出，脚本将尝试为您在后台重新拉起连接同一IP）。<br><strong>提示</strong>：您可以在主页 of 节点列表中直接点击“连接”按钮来选择并锁定不同的IP节点。`;
   } else {
     countryGroup.style.display = "none";
     warningDiv.style.color = "var(--text-secondary)";
-    warningDiv.style.background = "rgba(255, 255, 255, 0.02)";
-    warningDiv.style.border = "1px solid rgba(255, 255, 255, 0.05)";
-    warningDiv.innerHTML = `ℹ️ <strong>自动配置</strong>：全自动测试并选择最佳IP。在使用过程中，如果当前连接节点没有失效，将不再更换IP；如果当前节点失效，系统将立刻秒级自动漂移到其他最快的可用节点。`;
+    warningDiv.style.background = "var(--note-bg)";
+    warningDiv.style.border = "1px solid var(--note-line)";
+    warningDiv.innerHTML = `<strong>自动配置</strong>：全自动测试并选择最佳IP。在使用过程中，如果当前连接节点没有失效，将不再更换IP；如果当前节点失效，系统将立刻秒级自动漂移到其他最快的可用节点。`;
   }
 }
 
@@ -4478,6 +5212,254 @@ async function logoutAdmin() {
 // 页面加载时自动初始化数据
 load();
 
+// ── 版本检查与网页端在线更新 ────────────────────────────────────────────
+let appVersionBusy = false;
+let appUpdateRunning = false;
+let appReconnectTimer = null;
+
+function fmtVersionTime(iso) {
+  if (!iso) return "时间未知";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => (n < 10 ? "0" + n : String(n));
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function setVersionStatus(kind, html) {
+  const box = $("version_status");
+  if (!box) return;
+  box.className = "version-status" + (kind ? " is-" + kind : "");
+  $("version_status_text").innerHTML = html;
+}
+
+// 更新成功后立即把卡片/版本标记刷成新版本，避免重启前还显示“落后 N 个提交”
+function applyVersionAfterUpdate(data) {
+  const commit = data.new_commit || "";
+  $("version_current_commit").textContent = commit ? "v" + commit : "—";
+  if (data.new_message) $("version_current_subject").textContent = data.new_message;
+  if (data.new_date) $("version_current_meta").textContent = "提交于 " + fmtVersionTime(data.new_date);
+  $("version_remote_commit").textContent = commit ? "v" + commit : "—";
+  if (data.new_message) $("version_remote_subject").textContent = data.new_message;
+  if (data.new_date) $("version_remote_meta").textContent = "提交于 " + fmtVersionTime(data.new_date);
+  $("version_remote_badge").className = "badge available";
+  $("version_remote_badge").textContent = "已是最新";
+  if (commit) $("version_pill_text").textContent = "v" + commit;
+  $("version_pill").classList.remove("has-update");
+  $("version_pill_dot").style.display = "none";
+  $("version_update_btn").className = "btn btn-accent";
+  $("version_update_btn").disabled = true;
+  $("version_check_btn").disabled = true;
+}
+
+function renderAppVersion(info) {
+  const pill = $("version_pill");
+  const pillText = $("version_pill_text");
+  const dot = $("version_pill_dot");
+  const hasUpdate = !!(info && info.has_update);
+  if (info && info.current_commit) pillText.textContent = "v" + info.current_commit;
+  pill.classList.toggle("has-update", hasUpdate);
+  dot.style.display = hasUpdate ? "inline-block" : "none";
+  pill.title = hasUpdate ? `发现新版本（当前 v${info.current_commit}）` : "查看版本 / 检查更新";
+
+  $("version_current_branch").textContent = (info && info.branch) ? info.branch : "—";
+  $("version_current_commit").textContent = (info && info.current_commit) ? "v" + info.current_commit : "—";
+  $("version_current_subject").textContent = (info && info.current_message) || "未读取到提交说明";
+  $("version_current_meta").textContent = (info && info.current_date) ? "提交于 " + fmtVersionTime(info.current_date) : "";
+
+  const remoteBadge = $("version_remote_badge");
+  if (!info || !info.checked_remote) {
+    remoteBadge.className = "badge not_checked";
+    remoteBadge.textContent = "未检查";
+    $("version_remote_commit").textContent = "—";
+    $("version_remote_subject").textContent = "点击「检查更新」获取远端最新版本";
+    $("version_remote_meta").textContent = "";
+  } else {
+    $("version_remote_commit").textContent = info.remote_commit ? "v" + info.remote_commit : "—";
+    $("version_remote_subject").textContent = info.remote_message || "未读取到提交说明";
+    $("version_remote_meta").textContent = info.remote_date ? "提交于 " + fmtVersionTime(info.remote_date) : "";
+    remoteBadge.className = "badge " + (info.has_update ? "current-badge" : "available");
+    remoteBadge.textContent = info.has_update ? ("落后 " + info.commits_behind + " 个提交") : "已是最新";
+  }
+
+  const updateBtn = $("version_update_btn");
+  const canUpdate = !!(info && info.git_available !== false && info.is_git_repo);
+  if (!appUpdateRunning) {
+    // 有更新时主按钮为高亮的「立即更新」；已是最新时降级为备用的「强制重新拉取」
+    updateBtn.className = hasUpdate ? "btn btn-accent" : "btn";
+    updateBtn.dataset.force = hasUpdate ? "0" : "1";
+    updateBtn.disabled = !canUpdate;
+    updateBtn.textContent = hasUpdate ? "立即更新" : "强制重新拉取";
+  }
+
+  if (info && info.ok === false) {
+    setVersionStatus("bad", esc(info.error || "无法读取版本信息"));
+    return;
+  }
+  const dirtyNote = (info && info.local_dirty)
+    ? "<br>注意：安装目录存在未提交的本地改动，更新会以远端代码强制覆盖。"
+    : "";
+  if (!info || !info.checked_remote) {
+    setVersionStatus("", "本地版本已读取。点击「检查更新」连接 GitHub 获取远端最新版本。" + dirtyNote);
+  } else if (info.has_update) {
+    const extra = (info.commits_ahead > 0)
+      ? `<br>本地另有 <code>${info.commits_ahead}</code> 个提交领先于远端，更新后会被远端版本覆盖。`
+      : "";
+    setVersionStatus("update", `<strong>发现新版本</strong>：远端比当前多 <code>${info.commits_behind}</code> 个提交，可直接在此更新，服务会自动重启。` + extra + dirtyNote);
+  } else {
+    const aheadNote = (info.commits_ahead > 0)
+      ? `<br>本地有 <code>${info.commits_ahead}</code> 个提交未推送到远端（可能是本地修改）。`
+      : "";
+    setVersionStatus("ok", `<strong>已是最新版本</strong>：当前代码与远端 ${esc(info.branch || "")} 分支一致。` + aheadNote + dirtyNote);
+  }
+}
+
+async function loadAppVersionQuick() {
+  try {
+    const res = await fetch("./api/app_version", { cache: "no-store" });
+    if (!res.ok) return; // 会话失效等情况：顶栏保留占位
+    const data = await res.json();
+    renderAppVersion(data);
+  } catch (e) {
+    // 静默失败：顶栏保留占位
+  }
+}
+
+async function checkAppVersion() {
+  if (appVersionBusy) return;
+  appVersionBusy = true;
+  const checkBtn = $("version_check_btn");
+  const prevHtml = checkBtn.innerHTML;
+  checkBtn.disabled = true;
+  checkBtn.innerHTML = '<span class="spinner-mini"></span>检查中';
+  setVersionStatus("", "正在连接 GitHub 获取远端最新版本...");
+  try {
+    const res = await fetch("./api/app_version?check=1", { cache: "no-store" });
+    if (!res.ok) {
+      setVersionStatus("bad", "读取版本信息失败（会话可能已失效），请刷新页面后重新登录。");
+      return;
+    }
+    const data = await res.json();
+    renderAppVersion(data);
+  } catch (err) {
+    setVersionStatus("bad", "连接服务器失败，请稍后重试。");
+  } finally {
+    appVersionBusy = false;
+    checkBtn.disabled = false;
+    checkBtn.innerHTML = prevHtml;
+  }
+}
+
+function openVersionModal() {
+  $("admin_dropdown").style.display = "none";
+  $("version_modal").style.display = "flex";
+  checkAppVersion();
+}
+
+function closeVersionModal() {
+  $("version_modal").style.display = "none";
+}
+
+function onVersionPrimaryAction() {
+  const btn = $("version_update_btn");
+  runAppUpdate(btn.dataset.force === "1");
+}
+
+async function runAppUpdate(force) {
+  if (appUpdateRunning) return;
+  if (force && !confirm("强制重新拉取会用远端代码覆盖安装目录中的代码（保留 vpngate_data 运行数据），确定继续？")) return;
+  appUpdateRunning = true;
+  const updateBtn = $("version_update_btn");
+  const checkBtn = $("version_check_btn");
+  const prevLabel = updateBtn.textContent;
+  updateBtn.className = "btn btn-accent";
+  updateBtn.disabled = true;
+  updateBtn.innerHTML = '<span class="spinner-mini"></span>正在更新';
+  checkBtn.disabled = true;
+  setVersionStatus("", "正在从 GitHub 拉取最新代码，请稍候（通常几秒，网络较慢时可能更久）...");
+  try {
+    const res = await fetch("./api/update_app", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: !!force })
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) { data = {}; }
+
+    if (res.ok && data.ok && data.updated) {
+      applyVersionAfterUpdate(data);
+      const oldC = data.old_commit ? "v" + data.old_commit : "旧版本";
+      const newC = data.new_commit ? "v" + data.new_commit : "新版本";
+      startVersionReconnect(4, `更新成功（${esc(oldC)} → ${esc(newC)}）`);
+      return;
+    }
+
+    if (data.needs_force) {
+      setVersionStatus("warn", esc(data.message || "本地代码与远端不一致"));
+      checkBtn.disabled = false;
+      updateBtn.className = "btn";
+      updateBtn.dataset.force = "1";
+      updateBtn.disabled = false;
+      updateBtn.textContent = "强制重新拉取";
+      appUpdateRunning = false;
+      return;
+    }
+
+    if (res.ok && data.ok) {
+      setVersionStatus("ok", `<strong>${esc(data.message || "当前已是最新版本")}</strong>`);
+      checkBtn.disabled = false;
+      updateBtn.className = "btn";
+      updateBtn.dataset.force = "1";
+      updateBtn.disabled = false;
+      updateBtn.textContent = "强制重新拉取";
+      appUpdateRunning = false;
+      return;
+    }
+
+    setVersionStatus("bad", "更新失败：" + esc(data.error || data.message || "请稍后重试"));
+  } catch (err) {
+    setVersionStatus("bad", "请求更新失败，服务可能正在重启；若页面无响应请手动刷新并重新登录。");
+  }
+  appUpdateRunning = false;
+  checkBtn.disabled = false;
+  if (updateBtn.innerHTML.indexOf("spinner-mini") >= 0) updateBtn.textContent = prevLabel;
+}
+
+function startVersionReconnect(waitSeconds, lead) {
+  if (appReconnectTimer) clearInterval(appReconnectTimer);
+  let elapsed = 0;
+  const giveUpAfter = 90;
+  const head = lead || "更新已应用";
+  $("version_update_btn").className = "btn btn-accent";
+  $("version_update_btn").disabled = true;
+  $("version_update_btn").innerHTML = '<span class="spinner-mini"></span>等待服务重启';
+  appReconnectTimer = setInterval(async () => {
+    elapsed += 1;
+    if (elapsed <= waitSeconds) {
+      setVersionStatus("ok", `<strong>${head}</strong>，服务正在重启，约 <code>${waitSeconds - elapsed + 1}</code> 秒后自动刷新页面...（重启后需重新登录）`);
+      return;
+    }
+    setVersionStatus("ok", `<strong>${head}</strong>，服务正在重启，正在自动重连...（重启后需重新登录）`);
+    try {
+      const res = await fetch("./api/app_version", { cache: "no-store" });
+      if (res && res.status) {
+        clearInterval(appReconnectTimer);
+        appReconnectTimer = null;
+        window.location.reload();
+        return;
+      }
+    } catch (e) {}
+    if (elapsed >= waitSeconds + giveUpAfter) {
+      clearInterval(appReconnectTimer);
+      appReconnectTimer = null;
+      appUpdateRunning = false;
+      setVersionStatus("warn", "服务重启时间较长，请手动刷新页面（重启后需要重新登录）。");
+      $("version_check_btn").disabled = false;
+    }
+  }, 1000);
+}
+
+loadAppVersionQuick();
+
 // 每 10 秒在前台空闲时自动更新节点与状态，无需手动刷新页面
 setInterval(async () => {
   if (typeof state !== "undefined" && !state.is_connecting && (!testingNodeIds || !testingNodeIds.size) && document.visibilityState === "visible") {
@@ -4541,7 +5523,7 @@ function renderGatewayServices(services) {
         <div style="font-size: 12px; color: var(--text-secondary);">${esc(s.details || "-")}</div>
         ${s.error ? `
           <div style="font-size: 12px; color: var(--danger); background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.15); border-radius: 6px; padding: 6px 10px; margin-top: 4px; line-height: 1.4;">
-            ⚠️ 诊断原因: ${esc(s.error)}
+            诊断原因: ${esc(s.error)}
           </div>
         ` : ''}
       </div>
@@ -4602,11 +5584,11 @@ function filterAndRenderLogs() {
   }
   
   const linesHtml = filtered.map(l => {
-    let color = "#a5b4fc";
-    if (l.module === "Proxy") color = "#38bdf8";
-    if (l.module === "VPN") color = "#34d399";
-    if (l.level === "WARNING") color = "#fbbf24";
-    if (l.level === "ERROR") color = "#f43f5e";
+    let color = "var(--log-default)";
+    if (l.module === "Proxy") color = "var(--log-proxy)";
+    if (l.module === "VPN") color = "var(--log-vpn)";
+    if (l.level === "WARNING") color = "var(--log-warn)";
+    if (l.level === "ERROR") color = "var(--log-error)";
     
     return `<div style="color: ${color}; margin-bottom: 4px;">[${esc(l.timestamp)}] [${esc(l.level)}] [${esc(l.module)}] ${esc(l.message)}</div>`;
   }).join("");
@@ -4667,14 +5649,17 @@ function exportLogContent() {
   URL.revokeObjectURL(url);
 }
 
-function toggleTheme() {
-  document.body.classList.toggle("light");
-  const isLight = document.body.classList.contains("light");
-  localStorage.setItem("theme", isLight ? "light" : "dark");
+function applyTheme(theme) {
+  const light = theme === "light";
+  document.documentElement.classList.toggle("light", light);
+  if (document.body) document.body.classList.toggle("light", light);
 }
-(function(){
-  if (localStorage.getItem("theme") === "light") document.body.classList.add("light");
-})();
+
+function toggleTheme() {
+  const next = document.documentElement.classList.contains("light") ? "dark" : "light";
+  applyTheme(next);
+  try { localStorage.setItem("theme", next); } catch (e) {}
+}
 </script>
 </body></html>"""
 
@@ -4891,6 +5876,355 @@ def active_node_pinger() -> None:
         except Exception as e:
             print(f"[ERROR] active_node_pinger error: {e}", flush=True)
         time.sleep(10)
+
+
+# ───────────────────────── 网页端版本检查与在线更新 ─────────────────────────
+# 与 `ml update` (install.sh update_service) 保持一致：
+#   git fetch origin  ->  对比本地 HEAD 与 origin/<当前分支>  ->  git reset --hard origin/<分支>
+#   ->  清理 __pycache__  ->  重启服务。
+# 失败时只返回错误信息，绝不改动工作区。
+APP_REPO_DIR: Path = ROOT_DIR
+APP_GIT_TIMEOUT_SECONDS = 20.0
+app_update_lock = threading.Lock()
+
+
+def _git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    # 后台更新不允许任何交互式输入（凭据、密码、host key 确认等）
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    askpass = shutil.which("true")
+    if askpass:
+        env["GIT_ASKPASS"] = askpass
+    return env
+
+
+def run_git(repo_dir: Path, args: list[str], timeout: float = APP_GIT_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
+    git_bin = shutil.which("git")
+    if not git_bin:
+        raise RuntimeError("服务器未安装 git 命令")
+    cmd = [git_bin, "-c", f"safe.directory={repo_dir}", "-C", str(repo_dir), *args]
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=_git_env(),
+        stdin=subprocess.DEVNULL,
+    )
+
+
+def _git_output(repo_dir: Path, args: list[str], timeout: float = APP_GIT_TIMEOUT_SECONDS) -> str:
+    proc = run_git(repo_dir, args, timeout=timeout)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(detail[:300] or f"git {' '.join(args)} 执行失败")
+    return proc.stdout.strip()
+
+
+def _resolve_repo_dir(repo_dir: Path | None = None) -> Path:
+    return Path(repo_dir) if repo_dir else Path(APP_REPO_DIR)
+
+
+def _is_git_repo(repo_dir: Path) -> bool:
+    if not repo_dir.exists():
+        return False
+    try:
+        proc = run_git(repo_dir, ["rev-parse", "--is-inside-work-tree"], timeout=8.0)
+    except Exception:
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def _detect_branch(repo_dir: Path) -> str:
+    branch = ""
+    try:
+        branch = _git_output(repo_dir, ["rev-parse", "--abbrev-ref", "HEAD"], timeout=8.0)
+    except Exception:
+        branch = ""
+    if branch and branch != "HEAD":
+        return branch
+    # 与 install.sh 一致：分离 HEAD 时优先使用 origin/main、origin/master
+    for candidate in ("main", "master"):
+        for ref in (f"origin/{candidate}", candidate):
+            try:
+                if run_git(repo_dir, ["rev-parse", "--verify", "--quiet", ref], timeout=8.0).returncode == 0:
+                    return candidate
+            except Exception:
+                continue
+    return "main"
+
+
+def _commit_meta(repo_dir: Path, ref: str) -> dict[str, str]:
+    meta = {"commit": "", "commit_short": "", "date": "", "message": ""}
+    try:
+        raw = _git_output(repo_dir, ["log", "-1", "--format=%H%x1f%h%x1f%cI%x1f%s", ref], timeout=8.0)
+    except Exception:
+        return meta
+    if not raw:
+        return meta
+    parts = (raw.split("\x1f") + ["", "", "", ""])[:4]
+    meta["commit"] = parts[0].strip()
+    meta["commit_short"] = parts[1].strip()
+    meta["date"] = parts[2].strip()
+    meta["message"] = parts[3].strip()
+    return meta
+
+
+def _worktree_dirty(repo_dir: Path) -> bool:
+    try:
+        proc = run_git(repo_dir, ["status", "--porcelain", "--untracked-files=no"], timeout=10.0)
+    except Exception:
+        return False
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
+def _clean_pycache(repo_dir: Path) -> None:
+    # 与 install.sh 一致：更新后清理 Python 缓存，避免加载到旧的 .pyc
+    try:
+        for cache_dir in repo_dir.rglob("__pycache__"):
+            if cache_dir.is_dir():
+                shutil.rmtree(cache_dir, ignore_errors=True)
+    except Exception as exc:
+        print(f"[更新] 清理 __pycache__ 时出现问题: {exc}", flush=True)
+
+
+def collect_app_version(check_remote: bool = False, repo_dir: Path | None = None) -> dict[str, Any]:
+    """读取本地/远端版本信息。check_remote=True 时会执行 git fetch（只读，不修改工作区）。"""
+    repo = _resolve_repo_dir(repo_dir)
+    info: dict[str, Any] = {
+        "ok": True,
+        "git_available": shutil.which("git") is not None,
+        "repo_path": str(repo),
+        "is_git_repo": False,
+        "branch": "",
+        "current_commit": "",
+        "current_commit_full": "",
+        "current_date": "",
+        "current_message": "",
+        "remote_commit": "",
+        "remote_commit_full": "",
+        "remote_date": "",
+        "remote_message": "",
+        "commits_behind": 0,
+        "commits_ahead": 0,
+        "has_update": False,
+        "checked_remote": False,
+        "local_dirty": False,
+        "updating": app_update_lock.locked(),
+        "server_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "error": "",
+    }
+    if not info["git_available"]:
+        info["ok"] = False
+        info["error"] = "服务器未安装 git，无法检查或更新版本"
+        return info
+    if not _is_git_repo(repo):
+        info["ok"] = False
+        info["error"] = f"安装目录 {repo} 不是 Git 仓库，无法在线更新"
+        return info
+    try:
+        info["is_git_repo"] = True
+        branch = _detect_branch(repo)
+        info["branch"] = branch
+        local = _commit_meta(repo, "HEAD")
+        info["current_commit"] = local["commit_short"]
+        info["current_commit_full"] = local["commit"]
+        info["current_date"] = local["date"]
+        info["current_message"] = local["message"]
+        info["local_dirty"] = _worktree_dirty(repo)
+
+        if check_remote:
+            try:
+                fetch = run_git(repo, ["fetch", "--no-tags", "--prune", "origin"])
+            except subprocess.TimeoutExpired:
+                info["ok"] = False
+                info["error"] = f"连接远端超时（超过 {int(APP_GIT_TIMEOUT_SECONDS)} 秒），请稍后重试"
+                return info
+            except Exception as exc:
+                info["ok"] = False
+                info["error"] = f"拉取远端版本信息失败: {exc}"
+                return info
+            if fetch.returncode != 0:
+                detail = (fetch.stderr or fetch.stdout or "").strip().splitlines()
+                info["ok"] = False
+                info["error"] = "拉取远端版本信息失败: " + (detail[-1][:200] if detail else "网络不可用")
+                return info
+            remote_ref = f"origin/{branch}"
+            remote = _commit_meta(repo, remote_ref)
+            if not remote["commit"]:
+                info["ok"] = False
+                info["error"] = f"远端不存在分支 {remote_ref}"
+                return info
+            info["checked_remote"] = True
+            info["remote_commit"] = remote["commit_short"]
+            info["remote_commit_full"] = remote["commit"]
+            info["remote_date"] = remote["date"]
+            info["remote_message"] = remote["message"]
+            try:
+                behind = int(_git_output(repo, ["rev-list", "--count", f"HEAD..{remote_ref}"], timeout=10.0) or 0)
+            except Exception:
+                behind = 0
+            try:
+                ahead = int(_git_output(repo, ["rev-list", "--count", f"{remote_ref}..HEAD"], timeout=10.0) or 0)
+            except Exception:
+                ahead = 0
+            info["commits_behind"] = max(behind, 0)
+            info["commits_ahead"] = max(ahead, 0)
+            info["has_update"] = info["commits_behind"] > 0
+            info["diverged"] = info["has_update"] and info["commits_ahead"] > 0
+    except Exception as exc:
+        info["ok"] = False
+        info["error"] = str(exc)
+    return info
+
+
+def perform_app_update(force: bool = False, repo_dir: Path | None = None) -> dict[str, Any]:
+    """按 install.sh update_service() 的策略执行更新（fetch + reset --hard origin/<分支>）。
+
+    只负责改动代码，不负责重启进程；重启由调用方（HTTP Handler）安排。
+    """
+    repo = _resolve_repo_dir(repo_dir)
+    result: dict[str, Any] = {
+        "ok": True,
+        "updated": False,
+        "restart_needed": False,
+        "forced": bool(force),
+        "needs_force": False,
+        "branch": "",
+        "old_commit": "",
+        "new_commit": "",
+        "old_message": "",
+        "new_message": "",
+        "old_date": "",
+        "new_date": "",
+        "commits_behind": 0,
+        "message": "",
+        "error": "",
+    }
+    if not shutil.which("git"):
+        result["ok"] = False
+        result["error"] = "服务器未安装 git，无法在线更新"
+        return result
+    if not _is_git_repo(repo):
+        result["ok"] = False
+        result["error"] = f"安装目录 {repo} 不是 Git 仓库，无法在线更新"
+        return result
+    try:
+        branch = _detect_branch(repo)
+        result["branch"] = branch
+        old = _commit_meta(repo, "HEAD")
+        result["old_commit"] = old["commit_short"]
+        result["old_message"] = old["message"]
+        result["old_date"] = old["date"]
+        result["new_date"] = old["date"]
+
+        try:
+            fetch = run_git(repo, ["fetch", "--no-tags", "--prune", "origin"])
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"连接远端超时（超过 {int(APP_GIT_TIMEOUT_SECONDS)} 秒），请稍后重试")
+        if fetch.returncode != 0:
+            detail = (fetch.stderr or fetch.stdout or "").strip().splitlines()
+            raise RuntimeError("拉取远端代码失败: " + (detail[-1][:200] if detail else "网络不可用"))
+
+        remote_ref = f"origin/{branch}"
+        remote = _commit_meta(repo, remote_ref)
+        if not remote["commit"]:
+            raise RuntimeError(f"远端不存在分支 {remote_ref}")
+        try:
+            behind = int(_git_output(repo, ["rev-list", "--count", f"HEAD..{remote_ref}"], timeout=10.0) or 0)
+        except Exception:
+            behind = 0
+        result["commits_behind"] = max(behind, 0)
+        result["new_message"] = remote["message"]
+        result["new_date"] = remote["date"]
+
+        if not force:
+            if behind <= 0 and old["commit"] == remote["commit"]:
+                result["new_commit"] = old["commit_short"]
+                result["message"] = "当前已是最新版本"
+                return result
+            if behind <= 0:
+                result["ok"] = False
+                result["needs_force"] = True
+                result["new_commit"] = remote["commit_short"]
+                result["message"] = "本地代码与远端不一致（可能包含本地改动或领先的提交），如需强制对齐请使用强制更新"
+                return result
+
+        log_to_json(
+            "INFO",
+            "Main",
+            f"开始在线更新：{branch} {old['commit_short'] or '?'} -> {remote['commit_short']}（落后 {result['commits_behind']} 个提交）",
+        )
+        reset = run_git(repo, ["reset", "--hard", "--quiet", remote_ref], timeout=60.0)
+        if reset.returncode != 0:
+            detail = (reset.stderr or reset.stdout or "").strip().splitlines()
+            raise RuntimeError("应用远端代码失败: " + (detail[-1][:200] if detail else "未知错误"))
+
+        _clean_pycache(repo)
+        new = _commit_meta(repo, "HEAD")
+        result["new_commit"] = new["commit_short"]
+        result["new_message"] = new["message"]
+        result["new_date"] = new["date"]
+        result["updated"] = True
+        result["restart_needed"] = True
+        if old["commit"] == new["commit"]:
+            result["message"] = "已强制重新拉取代码（版本未变化），服务将在 2 秒内自动重启..."
+        else:
+            result["message"] = f"更新成功（{result['commits_behind']} 个新提交），服务将在 2 秒内自动重启..."
+        log_to_json(
+            "INFO",
+            "Main",
+            f"在线更新完成：{branch} {old['commit_short'] or '?'} -> {new['commit_short'] or '?'}，即将重启服务",
+        )
+    except Exception as exc:
+        result["ok"] = False
+        result["error"] = str(exc)
+        log_to_json("ERROR", "Main", f"在线更新失败: {exc}")
+    return result
+
+
+def service_restart_command() -> list[str] | None:
+    systemctl = shutil.which("systemctl")
+    if systemctl:
+        for unit in (
+            "/lib/systemd/system/aimilivpn.service",
+            "/etc/systemd/system/aimilivpn.service",
+            "/usr/lib/systemd/system/aimilivpn.service",
+        ):
+            if Path(unit).exists():
+                return [systemctl, "restart", "aimilivpn.service"]
+    rc_service = shutil.which("rc-service")
+    if rc_service and Path("/etc/init.d/aimilivpn").exists():
+        return [rc_service, "aimilivpn", "restart"]
+    return None
+
+
+def _exit_process() -> None:
+    """进程退出（独立函数便于测试与以后改为其他重启方式）。"""
+    os._exit(0)
+
+
+def schedule_app_restart(reason: str = "代码已更新", delay: float = 2.0) -> None:
+    """延后重启进程，让 HTTP 响应先回到浏览器（与 update_settings / update_credentials 相同的方式）。"""
+    def _worker() -> None:
+        time.sleep(delay)
+        cmd = service_restart_command()
+        if cmd:
+            try:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                print(f"[系统] {reason}，已请求重启服务: {' '.join(cmd)}", flush=True)
+                # 服务管理器应在数秒内结束本进程；若长时间未接管（未启用自动重启），主动退出兜底
+                time.sleep(20)
+                print(f"[系统] {reason}，进程仍未退出，主动退出以触发自动重启...", flush=True)
+                _exit_process()
+                return
+            except Exception as exc:
+                print(f"[警告] 重启服务命令执行失败: {exc}", flush=True)
+        print(f"[系统] {reason}，进程即将退出以触发自动重启...", flush=True)
+        _exit_process()
+
+    threading.Thread(target=_worker, daemon=True, name="app-restart").start()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -5145,6 +6479,13 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as e:
                     print(f"[API Logs] Error reading log file: {e}", flush=True)
             self.send_json({"logs": entries})
+        elif effective_path == "/api/app_version":
+            try:
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+                check = str((query.get("check") or [""])[0]).strip().lower() in ("1", "true", "yes", "on")
+                self.send_json(collect_app_version(check_remote=check))
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         else:
             self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
@@ -5385,6 +6726,31 @@ class Handler(BaseHTTPRequestHandler):
                     auth_file.write_text(json.dumps(ui_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
                 
                 self.send_json({"ok": True, "favorite_node_ids": fav_ids})
+            except Exception as exc:
+                self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if effective_path == "/api/update_app":
+            try:
+                payload = self.read_json_body()
+                force = bool(payload.get("force"))
+                if not app_update_lock.acquire(blocking=False):
+                    self.send_json({"ok": False, "error": "已有更新任务正在进行，请稍后再试"}, HTTPStatus.CONFLICT)
+                    return
+                try:
+                    result = perform_app_update(force=force)
+                finally:
+                    app_update_lock.release()
+                if result.get("ok") and result.get("updated"):
+                    # 先把结果送回浏览器，再延后重启，避免响应被中断
+                    self.send_json(result)
+                    schedule_app_restart(
+                        reason=f"代码已更新 {result.get('old_commit') or '?'} -> {result.get('new_commit') or '?'}",
+                        delay=2.0,
+                    )
+                else:
+                    status = HTTPStatus.OK if result.get("ok") or result.get("needs_force") else HTTPStatus.BAD_REQUEST
+                    self.send_json(result, status)
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
