@@ -5936,6 +5936,64 @@ def _is_git_repo(repo_dir: Path) -> bool:
     return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
+OFFICIAL_REPO_URL = "https://github.com/junchengluo9-del/aimilivpn.git"
+
+
+def _intended_repo_url(repo_dir: Path) -> str:
+    """install.sh 记录的本次安装仓库地址（git 配置 aimilivpn.repo-url）；未记录时返回空串。"""
+    try:
+        proc = run_git(repo_dir, ["config", "--get", "aimilivpn.repo-url"], timeout=8.0)
+        url = proc.stdout.strip() if proc.returncode == 0 else ""
+    except Exception:
+        url = ""
+    return url if "://" in url else ""
+
+
+def _ensure_repo_origin(repo_dir: Path) -> str:
+    """确保 origin 指向安装时记录的仓库；未记录时保持原样，避免破坏自定义 fork。
+
+    返回当前生效的 origin 地址（无法获取时返回空串）。
+    """
+    intended = _intended_repo_url(repo_dir)
+    try:
+        proc = run_git(repo_dir, ["remote", "get-url", "origin"], timeout=8.0)
+        url = proc.stdout.strip() if proc.returncode == 0 else ""
+    except Exception:
+        url = ""
+    if not url:
+        target = intended or OFFICIAL_REPO_URL
+        try:
+            run_git(repo_dir, ["remote", "add", "origin", target], timeout=10.0)
+            return target
+        except Exception:
+            return ""
+    if intended and url != intended:
+        try:
+            moved = run_git(repo_dir, ["remote", "set-url", "origin", intended], timeout=10.0)
+            if moved.returncode == 0:
+                log_to_json("INFO", "Main", f"已将仓库源 {url} 更改为安装时记录的仓库 {intended}")
+                return intended
+        except Exception:
+            return url
+    return url
+
+
+def _resolve_remote_branch(repo_dir: Path, branch: str) -> str:
+    """当前分支在远端已不存在时（例如旧的 bate 分支）回退到 main/master。"""
+    def exists(ref: str) -> bool:
+        try:
+            return run_git(repo_dir, ["rev-parse", "--verify", "--quiet", ref], timeout=8.0).returncode == 0
+        except Exception:
+            return False
+
+    if branch and branch != "HEAD" and exists(f"origin/{branch}"):
+        return branch
+    for candidate in ("main", "master"):
+        if exists(f"origin/{candidate}"):
+            return candidate
+    return branch or "main"
+
+
 def _detect_branch(repo_dir: Path) -> str:
     branch = ""
     try:
@@ -6035,6 +6093,8 @@ def collect_app_version(check_remote: bool = False, repo_dir: Path | None = None
         info["local_dirty"] = _worktree_dirty(repo)
 
         if check_remote:
+            # 先确保 origin 指向官方仓库（旧的仓库源自动纠正）
+            _ensure_repo_origin(repo)
             try:
                 fetch = run_git(repo, ["fetch", "--no-tags", "--prune", "origin"])
             except subprocess.TimeoutExpired:
@@ -6050,6 +6110,8 @@ def collect_app_version(check_remote: bool = False, repo_dir: Path | None = None
                 info["ok"] = False
                 info["error"] = "拉取远端版本信息失败: " + (detail[-1][:200] if detail else "网络不可用")
                 return info
+            branch = _resolve_remote_branch(repo, branch)
+            info["branch"] = branch
             remote_ref = f"origin/{branch}"
             remote = _commit_meta(repo, remote_ref)
             if not remote["commit"]:
@@ -6119,6 +6181,7 @@ def perform_app_update(force: bool = False, repo_dir: Path | None = None) -> dic
         result["old_date"] = old["date"]
         result["new_date"] = old["date"]
 
+        _ensure_repo_origin(repo)
         try:
             fetch = run_git(repo, ["fetch", "--no-tags", "--prune", "origin"])
         except subprocess.TimeoutExpired:
@@ -6127,6 +6190,8 @@ def perform_app_update(force: bool = False, repo_dir: Path | None = None) -> dic
             detail = (fetch.stderr or fetch.stdout or "").strip().splitlines()
             raise RuntimeError("拉取远端代码失败: " + (detail[-1][:200] if detail else "网络不可用"))
 
+        branch = _resolve_remote_branch(repo, branch)
+        result["branch"] = branch
         remote_ref = f"origin/{branch}"
         remote = _commit_meta(repo, remote_ref)
         if not remote["commit"]:
@@ -6156,6 +6221,12 @@ def perform_app_update(force: bool = False, repo_dir: Path | None = None) -> dic
             "Main",
             f"开始在线更新：{branch} {old['commit_short'] or '?'} -> {remote['commit_short']}（落后 {result['commits_behind']} 个提交）",
         )
+        if _detect_branch(repo) != branch:
+            # 本地停留在已失效的分支（例如旧的 bate）时，先切回目标分支再对齐代码
+            checkout = run_git(repo, ["checkout", "-f", branch], timeout=30.0)
+            if checkout.returncode != 0:
+                detail = (checkout.stderr or checkout.stdout or "").strip().splitlines()
+                raise RuntimeError("切换到分支失败: " + (detail[-1][:200] if detail else branch))
         reset = run_git(repo, ["reset", "--hard", "--quiet", remote_ref], timeout=60.0)
         if reset.returncode != 0:
             detail = (reset.stderr or reset.stdout or "").strip().splitlines()

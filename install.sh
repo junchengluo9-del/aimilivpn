@@ -47,15 +47,39 @@ echo -e "${BLUE}        欢迎使用 AimiliVPN 一键源码部署与管理脚本
 echo -e "${BLUE}==========================================================${PLAIN}"
 
 # 3. Configure GitHub Repository URL
-# Default to the official repository (baoweise-bot/aimili-vpngate)
-DEFAULT_USER="baoweise-bot"
-DEFAULT_REPO="aimili-vpngate"
+# Default to the official repository (junchengluo9-del/aimilivpn)
+DEFAULT_USER="junchengluo9-del"
+DEFAULT_REPO="aimilivpn"
 
 # Allow custom repository override via command line arguments
+# 用法: bash install.sh [github_user] [github_repo]
 GITHUB_USER="${1:-${DEFAULT_USER}}"
 GITHUB_REPO="${2:-${DEFAULT_REPO}}"
 
 GITHUB_URL="https://github.com/${GITHUB_USER}/${GITHUB_REPO}.git"
+
+# 是否显式指定了仓库（仅用于安装提示；显式指定时以参数为准）
+CUSTOM_REPO=0
+if [ -n "${1:-}" ] || [ -n "${2:-}" ]; then
+    CUSTOM_REPO=1
+fi
+
+# 确保已安装目录的 origin 指向本次安装使用的仓库，并记录到 git 配置供网页端/`ml` 读取
+ensure_origin() {
+    local current
+    current=$(git remote get-url origin 2>/dev/null || true)
+    if [ -z "${current}" ]; then
+        echo -e "  -> 未检测到 origin，正在添加仓库源 ${GITHUB_URL}"
+        git remote add origin "${GITHUB_URL}"
+    elif [ "${current}" != "${GITHUB_URL}" ]; then
+        echo -e "  -> 仓库源 ${current} 已切换为 ${GITHUB_URL}"
+        if [ "${CUSTOM_REPO}" != "1" ]; then
+            echo -e "     (如需继续使用自定义 fork，请以参数方式运行: bash install.sh <github_user> <repo_name>)"
+        fi
+        git remote set-url origin "${GITHUB_URL}"
+    fi
+    git config aimilivpn.repo-url "${GITHUB_URL}" || true
+}
 
 echo -e "\n${YELLOW}[1/4] 正在安装系统基础依赖...${PLAIN}"
 if [ "$PKG_MGR" = "apt-get" ]; then
@@ -82,26 +106,30 @@ fi
 
 # 4. Clone or pull the repository
 INSTALL_DIR="/opt/aimilivpn"
-# 默认部署分支（在 bate 分支设为 bate；在 main 分支设为 main）
+# 默认部署分支（本项目只使用 main 分支，不存在 bate 分支）
 DEFAULT_DEPLOY_BRANCH="main"
+DEPLOY_BRANCH="${DEFAULT_DEPLOY_BRANCH}"
 
-# 自动检测本地已安装版本当前所在的分支
-CURRENT_BRANCH=""
-if [ -d "${INSTALL_DIR}/.git" ]; then
-    CURRENT_BRANCH=$(cd "${INSTALL_DIR}" && git rev-parse --abbrev-ref HEAD 2>/dev/null)
-fi
-DEPLOY_BRANCH="${CURRENT_BRANCH:-$DEFAULT_DEPLOY_BRANCH}"
-
-echo -e "\n${YELLOW}[2/4] 正在从 GitHub 部署源代码到 ${INSTALL_DIR} (目标分支: ${DEPLOY_BRANCH})...${PLAIN}"
 if [ -f "${INSTALL_DIR}/.local_dev" ]; then
-    echo -e "${GREEN}检测到本地开发模式 (.local_dev)，跳过 git pull/reset 保持本地修改。${PLAIN}"
+    echo -e "\n${YELLOW}[2/4] 检测到本地开发模式 (.local_dev)，跳过 git pull/reset 保持本地修改。${PLAIN}"
 else
     if [ -d "${INSTALL_DIR}" ]; then
-        echo -e "  -> 目录 ${INSTALL_DIR} 已存在，正在更新并强制覆盖本地源码..."
+        echo -e "\n${YELLOW}[2/4] 正在从 GitHub 部署源代码到 ${INSTALL_DIR} ...${PLAIN}"
+        echo -e "  -> 目录 ${INSTALL_DIR} 已存在，正在检查仓库来源并更新源码..."
         cd "${INSTALL_DIR}"
-        git fetch --all || true
-        git checkout "${DEPLOY_BRANCH}" || git checkout -b "${DEPLOY_BRANCH}" "origin/${DEPLOY_BRANCH}" || true
+        ensure_origin
+        git fetch --all --prune || git fetch --all || true
+        # 自动检测本地已安装版本当前所在的分支；若该分支在远端已不存在（例如旧的 bate 分支），回退到 main
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+        if [ -n "${CURRENT_BRANCH}" ] && [ "${CURRENT_BRANCH}" != "HEAD" ]; then
+            if git rev-parse --verify --quiet "origin/${CURRENT_BRANCH}" >/dev/null; then
+                DEPLOY_BRANCH="${CURRENT_BRANCH}"
+            else
+                echo -e "  -> 本地分支 ${CURRENT_BRANCH} 在远端已不存在，切换到 ${DEFAULT_DEPLOY_BRANCH} 分支。"
+            fi
+        fi
         echo -e "  -> 正在强制重置本地源码至 origin/${DEPLOY_BRANCH} ..."
+        git checkout -f "${DEPLOY_BRANCH}" || git checkout -f -b "${DEPLOY_BRANCH}" "origin/${DEPLOY_BRANCH}" || true
         if git reset --hard "origin/${DEPLOY_BRANCH}"; then
             echo -e "${GREEN}  -> 源码更新成功！${PLAIN}"
         else
@@ -112,6 +140,7 @@ else
             fi
         fi
     else
+        echo -e "\n${YELLOW}[2/4] 正在从 GitHub 部署源代码到 ${INSTALL_DIR} (目标分支: ${DEPLOY_BRANCH})...${PLAIN}"
         echo -e "  -> 正在克隆 GitHub 仓库 ${GITHUB_URL} (分支: ${DEPLOY_BRANCH}) ..."
         if git clone -b "${DEPLOY_BRANCH}" "${GITHUB_URL}" "${INSTALL_DIR}"; then
             echo -e "${GREEN}  -> 克隆成功！${PLAIN}"
@@ -126,6 +155,8 @@ else
                 exit 1
             fi
         fi
+        # 记录本次安装使用的仓库地址，供网页端更新与 `ml update` 使用
+        git -C "${INSTALL_DIR}" config aimilivpn.repo-url "${GITHUB_URL}" || true
     fi
 fi
 
@@ -190,6 +221,10 @@ import shutil
 
 INSTALL_DIR = "/opt/aimilivpn"
 LOG_FILE = "/opt/aimilivpn/vpngate_data/vpngate.log"
+# 仓库地址：安装时由 install.sh 写入本次安装实际使用的仓库
+OFFICIAL_REPO_URL = "@@GITHUB_URL@@"
+if not OFFICIAL_REPO_URL.startswith("http"):
+    OFFICIAL_REPO_URL = "https://github.com/junchengluo9-del/aimilivpn.git"
 
 def generate_random_password():
     import random
@@ -515,6 +550,40 @@ def show_logs():
         print(f"日志文件不存在: {LOG_FILE}")
         time.sleep(2)
 
+def repo_target_url():
+    """本次安装使用的仓库地址：优先读取 install.sh 写入的 git 配置 aimilivpn.repo-url。"""
+    try:
+        got = subprocess.run(["git", "config", "--get", "aimilivpn.repo-url"], capture_output=True, text=True)
+        url = got.stdout.strip() if got.returncode == 0 else ""
+        if "://" in url:
+            return url
+    except Exception:
+        pass
+    return OFFICIAL_REPO_URL
+
+def ensure_repo_origin():
+    """确保 origin 指向本次安装使用的仓库；自定义 fork 只要安装时记录过就不会被改掉。"""
+    target = repo_target_url()
+    try:
+        got = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True)
+        url = got.stdout.strip() if got.returncode == 0 else ""
+    except Exception:
+        url = ""
+    if not url:
+        try:
+            subprocess.run(["git", "remote", "add", "origin", target], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return target
+        except Exception:
+            return ""
+    if url != target:
+        try:
+            subprocess.run(["git", "remote", "set-url", "origin", target], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"已将仓库源 {url} 切换为 {target}", flush=True)
+            return target
+        except Exception:
+            return url
+    return url
+
 def update_service():
     print("正在获取远程更新并检测版本...", flush=True)
     if os.path.exists(INSTALL_DIR):
@@ -525,12 +594,20 @@ def update_service():
                 time.sleep(3)
                 return
             
+            # 确保仓库源指向官方仓库（旧的仓库源会被纠正，自定义 fork 保持原样）
+            ensure_repo_origin()
+
             # Fetch remote origin updates
-            subprocess.run(["git", "fetch", "--all"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["git", "fetch", "--all", "--prune"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            # Detect remote branch (prefer current local branch, fallback to origin/main or origin/master)
+            # Detect remote branch (prefer current local branch when it exists on origin, fallback to origin/main or origin/master)
             curr = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
             branch = curr.stdout.strip() if curr.returncode == 0 else ""
+            if branch and branch != "HEAD":
+                chk = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"origin/{branch}"], capture_output=True, text=True)
+                if chk.returncode != 0:
+                    print(f"本地分支 {branch} 在远端已不存在，将切换到 main 分支。", flush=True)
+                    branch = ""
             if not branch or branch == "HEAD":
                 branch = "main"
                 for b in ["main", "master"]:
@@ -558,6 +635,7 @@ def update_service():
                     return
             
             print(f"\n正在强制重置本地代码至 origin/{branch} ...", flush=True)
+            subprocess.run(["git", "checkout", "-f", branch], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["git", "reset", "--hard", f"origin/{branch}"], check=True)
             
             # Clean up python cache files
@@ -959,6 +1037,7 @@ def main():
 if __name__ == "__main__":
     main()
 EOF
+sed -i "s|@@GITHUB_URL@@|${GITHUB_URL}|g" /usr/bin/ml
 chmod +x /usr/bin/ml
 
 # 7. Configure Custom parameters (First-time installation check)
