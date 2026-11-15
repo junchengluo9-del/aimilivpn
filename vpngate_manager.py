@@ -5316,6 +5316,7 @@ function renderAppVersion(info) {
 async function loadAppVersionQuick() {
   try {
     const res = await fetch("./api/app_version", { cache: "no-store" });
+    if (!res.ok) return; // 会话失效等情况：顶栏保留占位
     const data = await res.json();
     renderAppVersion(data);
   } catch (e) {
@@ -5333,6 +5334,10 @@ async function checkAppVersion() {
   setVersionStatus("", "正在连接 GitHub 获取远端最新版本...");
   try {
     const res = await fetch("./api/app_version?check=1", { cache: "no-store" });
+    if (!res.ok) {
+      setVersionStatus("bad", "读取版本信息失败（会话可能已失效），请刷新页面后重新登录。");
+      return;
+    }
     const data = await res.json();
     renderAppVersion(data);
   } catch (err) {
